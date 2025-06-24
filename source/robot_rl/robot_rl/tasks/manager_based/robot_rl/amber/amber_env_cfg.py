@@ -13,7 +13,6 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import TerminationTermCfg, SceneEntityCfg
 # from isaaclab.managers.reset_manager import ResetCallback
 from isaaclab.assets import AssetBaseCfg
-from isaaclab.sensors import ContactSensorCfg
 import robot_rl.tasks.manager_based.robot_rl.amber.mdp as mdp
 from isaaclab.managers import EventTermCfg
 
@@ -115,16 +114,86 @@ class AmberRewardCfg(RewardsCfg):
     """Keep the default velocity‐tracking rewards, but turn off unwanted terms."""
 
     # big penalty on fall (pelvis contact)
-    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-200.0)
+    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-100.0)
 
     # track forward velocity (x) – using the base class's XY function is fine since y is always zero
     track_lin_vel_xy = RewTerm(
         func=mdp.track_lin_vel_xy_exp,
-        weight=1.0,
+        weight=1.5,
         params={"command_name": "base_velocity",
                         "std": 0.5,      },      # required parameter},
     )
+    # punishes joint angles
+    joint_angles = RewTerm(
+        func=mdp.track_joint_angles_exp,
+        weight=3.0,           # <— tune this scalar to control strength
+        params={"std": 0.5},  # <— how “wide” your kernel is
+    )
+    # torso angle
+    torso_rotation = RewTerm(
+        func=mdp.torso_rotation_cost,
+        weight=-0.5,    # <— tune this: more negative = stronger penalty
+        params={
+            # match the link name in your URDF
+            "asset_cfg": SceneEntityCfg("robot", body_names=["torso"]),
+        },
+    )
+    #rewards symmetric footsteps
+    foot_phase_contact = RewTerm(
+        func=mdp.foot_phase_contact,
+        weight=1,   # tune so “2 in‐phase” ≈ your other reward scales
+        params={
+            "period": 0.8,
+            "left_sensor_name": "contact_forces_left",
+            "right_sensor_name": "contact_forces_right",
+        },
+    )
 
+    #one feet is in front of the other
+    # foot_forward_placement = RewTerm(
+    #     func=mdp.foot_forward_placement_amber,
+    #     weight=1.0,     # tune so a good “step” (~threshold) is on par with other rewards
+    #     params={
+    #         "command_name": "base_velocity",
+    #         "threshold":    0.1,    # meters per step before it saturates
+    #         "period":       0.8,    # your gait period
+    #         # shin body_names come from your URDF
+    #         "asset_cfg":    SceneEntityCfg("robot", body_names=["left_shin","right_shin"]),
+    #     },
+    # )
+    #     # alternative and progressive footsteps
+    alternating_forward_step = RewTerm(
+        func=mdp.alternating_forward_step,
+        weight=100,   # tune so a “good” forward step ≈ your other rewards
+        params={
+            "command_name":   "base_velocity",
+            "threshold":      0.1,   # max meters per step before saturation
+            # shin link names come from your URDF
+            "asset_cfg":      SceneEntityCfg(
+                                   "robot",
+                                   body_names=["left_shin", "right_shin"]
+                               ),
+            "min_cmd_speed":  0.1,   # only reward when moving
+        },
+    )
+    # foot_clearance = RewTerm(
+    #     func=mdp.foot_clearance_amber,
+    #     weight=1.0,   # tune so its scale matches your other rewards
+    #     params={
+    #         "target_height": 0.1,            # desired clearance (m)
+    #         "left_sensor_name":  "contact_forces_left",
+    #         "right_sensor_name": "contact_forces_right",
+    #     },
+    # )
+    # symmetric_foot_airtime = RewTerm(
+    #     func=mdp.symmetric_phase_contact_amber,
+    #     weight=2,   # tune to balance with other rewards
+    #     params={
+    #         "command_name": "base_velocity",
+    #         "threshold":    2,
+    #         "period":      0.8,
+    #     },
+    # )
     # no need to track angular yaw (z) or sideways velocity
     track_ang_vel_z = None
     # small alive bonus
@@ -150,7 +219,7 @@ class AmberEnvCfg(LocomotionVelocityRoughEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
-
+    
         # # — swap in our Amber robot articulation —
         # self.scene.robot = AMBER_CFG.replace(prim_path="{ENV_REGEX_NS}/Amber")
 

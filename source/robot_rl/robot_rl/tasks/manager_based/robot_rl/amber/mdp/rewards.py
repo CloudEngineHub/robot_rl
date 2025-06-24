@@ -9,7 +9,9 @@ import torch
 import math
 from typing import TYPE_CHECKING
 
-from isaaclab.assets import Articulation
+from isaaclab.envs import ManagerBasedRLEnv
+
+from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import wrap_to_pi
 from isaaclab.sensors import ContactSensor
@@ -30,65 +32,65 @@ def joint_pos_target(
     q_err = joint_weight * torch.square(q_pos - joint_des)
     return torch.mean(torch.exp(-q_err / std ** 2), dim=-1)
 
-def symmetric_feet_air_time_biped(
-        env: ManagerBasedRLEnv,
-        command_name: str,
-        threshold: float,
-        sensor_cfg: SceneEntityCfg
-) -> torch.Tensor:
-    """Reward long steps while enforcing symmetric gait patterns for bipeds.
+# def symmetric_feet_air_time_biped(
+#         env: ManagerBasedRLEnv,
+#         command_name: str,
+#         threshold: float,
+#         sensor_cfg: SceneEntityCfg
+# ) -> torch.Tensor:
+#     """Reward long steps while enforcing symmetric gait patterns for bipeds.
 
-    Ensures balanced stepping by:
-    - Tracking air/contact time separately for each foot
-    - Penalizing asymmetric gait patterns
-    - Maintaining alternating single stance phases
-    """
-    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+#     Ensures balanced stepping by:
+#     - Tracking air/contact time separately for each foot
+#     - Penalizing asymmetric gait patterns
+#     - Maintaining alternating single stance phases
+#     """
+#     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
 
-    # Split into left and right foot indices
-    left_ids = [sensor_cfg.body_ids[0]]
-    right_ids = [sensor_cfg.body_ids[1]]
+#     # Split into left and right foot indices
+#     left_ids = [sensor_cfg.body_ids[0]]
+#     right_ids = [sensor_cfg.body_ids[1]]
 
-    # Get timing data for each foot
-    air_time_left = contact_sensor.data.current_air_time[:, left_ids]
-    air_time_right = contact_sensor.data.current_air_time[:, right_ids]
-    contact_time_left = contact_sensor.data.current_contact_time[:, left_ids]
-    contact_time_right = contact_sensor.data.current_contact_time[:, right_ids]
-    last_air_time_left = contact_sensor.data.last_air_time[:, left_ids]
-    last_air_time_right = contact_sensor.data.last_air_time[:, right_ids]
-    last_contact_time_left = contact_sensor.data.last_contact_time[:, left_ids]
-    last_contact_time_right = contact_sensor.data.last_contact_time[:, right_ids]
+#     # Get timing data for each foot
+#     air_time_left = contact_sensor.data.current_air_time[:, left_ids]
+#     air_time_right = contact_sensor.data.current_air_time[:, right_ids]
+#     contact_time_left = contact_sensor.data.current_contact_time[:, left_ids]
+#     contact_time_right = contact_sensor.data.current_contact_time[:, right_ids]
+#     last_air_time_left = contact_sensor.data.last_air_time[:, left_ids]
+#     last_air_time_right = contact_sensor.data.last_air_time[:, right_ids]
+#     last_contact_time_left = contact_sensor.data.last_contact_time[:, left_ids]
+#     last_contact_time_right = contact_sensor.data.last_contact_time[:, right_ids]
 
-    # Compute contact states
-    in_contact_left = contact_time_left > 0.0
-    in_contact_right = contact_time_right > 0.0
+#     # Compute contact states
+#     in_contact_left = contact_time_left > 0.0
+#     in_contact_right = contact_time_right > 0.0
 
-    # Calculate mode times for each foot
-    left_mode_time = torch.where(in_contact_left, contact_time_left, air_time_left)
-    right_mode_time = torch.where(in_contact_right, contact_time_right, air_time_right)
-    last_left_mode_time = torch.where(in_contact_left, last_air_time_left, last_contact_time_left)
-    last_right_mode_time = torch.where(in_contact_right, last_air_time_right, last_contact_time_right)
+#     # Calculate mode times for each foot
+#     left_mode_time = torch.where(in_contact_left, contact_time_left, air_time_left)
+#     right_mode_time = torch.where(in_contact_right, contact_time_right, air_time_right)
+#     last_left_mode_time = torch.where(in_contact_left, last_air_time_left, last_contact_time_left)
+#     last_right_mode_time = torch.where(in_contact_right, last_air_time_right, last_contact_time_right)
 
-    # Check for proper single stance (one foot in contact, one in air)
-    left_stance = in_contact_left.any(dim=1) & (~in_contact_right.any(dim=1))
-    right_stance = in_contact_right.any(dim=1) & (~in_contact_left.any(dim=1))
-    single_stance = left_stance | right_stance
+#     # Check for proper single stance (one foot in contact, one in air)
+#     left_stance = in_contact_left.any(dim=1) & (~in_contact_right.any(dim=1))
+#     right_stance = in_contact_right.any(dim=1) & (~in_contact_left.any(dim=1))
+#     single_stance = left_stance | right_stance
 
-    # Calculate symmetric reward components
-    left_reward = torch.min(torch.where(left_stance.unsqueeze(-1), left_mode_time, 0.0), dim=1)[0]
-    right_reward = torch.min(torch.where(right_stance.unsqueeze(-1), right_mode_time, 0.0), dim=1)[0]
-    last_left_reward = torch.min(torch.where(left_stance.unsqueeze(-1), last_left_mode_time, 0.0), dim=1)[0]
-    last_right_reward = torch.min(torch.where(right_stance.unsqueeze(-1), last_right_mode_time, 0.0), dim=1)[0]
-    # Combine rewards with symmetry penalty
-    base_reward = (left_reward + right_reward) / 2.0
-    symmetry_penalty = torch.abs(left_reward - last_right_reward) + torch.abs(right_reward - last_left_reward)
-    reward = base_reward - 0.1 * symmetry_penalty
+#     # Calculate symmetric reward components
+#     left_reward = torch.min(torch.where(left_stance.unsqueeze(-1), left_mode_time, 0.0), dim=1)[0]
+#     right_reward = torch.min(torch.where(right_stance.unsqueeze(-1), right_mode_time, 0.0), dim=1)[0]
+#     last_left_reward = torch.min(torch.where(left_stance.unsqueeze(-1), last_left_mode_time, 0.0), dim=1)[0]
+#     last_right_reward = torch.min(torch.where(right_stance.unsqueeze(-1), last_right_mode_time, 0.0), dim=1)[0]
+#     # Combine rewards with symmetry penalty
+#     base_reward = (left_reward + right_reward) / 2.0
+#     symmetry_penalty = torch.abs(left_reward - last_right_reward) + torch.abs(right_reward - last_left_reward)
+#     reward = base_reward - 0.1 * symmetry_penalty
 
-    # Apply threshold and command scaling
-    reward = torch.clamp(reward, max=threshold)
-    command_scale = torch.norm(env.command_manager.get_command(command_name)[:, :2], dim=1) > 0.1
+#     # Apply threshold and command scaling
+#     reward = torch.clamp(reward, max=threshold)
+#     command_scale = torch.norm(env.command_manager.get_command(command_name)[:, :2], dim=1) > 0.1
 
-    return reward * command_scale
+#     return reward * command_scale
 
 def feet_slide(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Penalize feet sliding.
@@ -478,64 +480,6 @@ def compute_step_location(env: ManagerBasedRLEnv, env_ids: torch.Tensor,
     # print(f"updated des pos! time: {env.sim.current_time}")
     return p
 
-def foot_clearance(env: ManagerBasedRLEnv,
-                   target_height: float,
-                   sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_sensor"),
-                   asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),) -> torch.Tensor:
-    """Reward foot clearance."""
-    asset: Articulation = env.scene[asset_cfg.name]
-    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-
-    # Get contact state
-    contacts = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
-
-    # Calculate foot heights
-    feet_z_err = asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - target_height
-    pos_error = torch.square(feet_z_err) * ~contacts
-    # print("feet_z:", asset.data.body_pos_w[:, asset_cfg.body_ids, 2]*~contacts)
-
-    return torch.sum(pos_error, dim=(1))
-
-def phase_contact(
-    env: ManagerBasedRLEnv,
-        period: float = 0.8,
-        command_name: str | None = None,
-    sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_sensor"),
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
-) -> torch.Tensor:
-    """Reward foot contact with regards to phase."""
-    asset: Articulation = env.scene[asset_cfg.name]
-    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-    # Get contact state
-    res = torch.zeros(env.num_envs, dtype=torch.float, device=env.device)
-
-    # Contact phase
-    tp = (env.sim.current_time % period) / period     # Scaled between 0-1
-    phi_c = torch.tensor(math.sin(2*torch.pi*tp)/math.sqrt(math.sin(2*torch.pi*tp)**2 + 0.04), device=env.device)
-
-    stance_i = 0
-    if phi_c > 0:
-        stance_i = 1
-
-     # check if robot needs to be standing
-    if command_name is not None:
-        command_norm = torch.norm(env.command_manager.get_command(command_name)[:, :3], dim=1)
-        is_small_command = command_norm < 0.005
-        for i in range(2):
-            is_stance = stance_i == i
-            # set is_stance to be true if the command is small
-            is_stance = is_stance | is_small_command
-            contact = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids[i], :].norm(dim=-1).max(dim=1)[0] > 1.0
-            res += ~(contact ^ is_stance)
-    else:
-        for i in range(2):
-            is_stance = stance_i == i
-            # set is_stance to be true if the command is small
-            is_stance = is_stance
-            contact = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids[i], :].norm(dim=-1).max(dim=1)[0] > 1.0
-            res += ~(contact ^ is_stance)
-    return res
-
 def contact_no_vel(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Reward feet contact with zero velocity."""
     # extract the used quantities (to enable type-hinting)
@@ -545,3 +489,315 @@ def contact_no_vel(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = 
     body_vel = asset.data.body_lin_vel_w[:, asset_cfg.body_ids] * contacts.unsqueeze(-1)
     penalize = torch.square(body_vel[:,:,:3])
     return torch.sum(penalize, dim=(1,2))
+
+
+def track_joint_angles_exp(
+    env: ManagerBasedRLEnv,
+    std: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward small joint angles using an exponential kernel (penalizes large angles)."""
+    # grab the robot’s RigidObject
+    asset: RigidObject = env.scene[asset_cfg.name]
+    # if not hasattr(track_joint_angles_exp, "_printed"):
+    #     # try the standard dof_names, otherwise fall back to the init_state mapping
+    #     try:
+    #         joint_names = asset.dof_names
+    #     except AttributeError:
+    #         joint_names = list(asset.cfg.init_state.joint_pos.keys())
+    #     print(f"[track_joint_angles_exp] controlling joints: {joint_names}")
+    #     track_joint_angles_exp._printed = True
+
+    # this tensor is [num_envs, num_joints]
+    joint_pos = asset.data.joint_pos
+
+    # sum of squared angles across all controlled joints
+    angle_error = torch.sum(torch.square(joint_pos), dim=1)
+
+    # safeguard
+    std = max(std, 1e-4)
+
+    # exponential kernel (clamp to avoid overflow)
+    out = -angle_error / std**2
+    out = torch.clamp(out, -50, 50)
+    out = torch.exp(out)
+    return out
+
+
+def foot_phase_contact(
+    env: ManagerBasedRLEnv,
+    period: float = 0.8,
+    left_sensor_name: str = "contact_forces_left",
+    right_sensor_name: str = "contact_forces_right",
+) -> torch.Tensor:
+    """Reward a left/right shin contact if it matches the swing/stance phase."""
+    # fetch the two sensors from the scene.sensors dict
+    left_sensor  = env.scene.sensors[left_sensor_name]
+    right_sensor = env.scene.sensors[right_sensor_name]
+
+    # prepare a per-env score
+    res = torch.zeros(env.num_envs, device=env.device, dtype=torch.float)
+
+    # compute a single scalar phase [0,1) → stance foot index 0 or 1
+    tp = (env.sim.current_time % period) / period         # Python float
+    phi = math.sin(2 * math.pi * tp)                      # Python float
+    stance_i = 1 if phi > 0 else 0
+
+    # for each foot: check “in contact” vs “should be in stance”
+    for idx, sensor in enumerate((left_sensor, right_sensor)):
+        # net_forces_w_history: [N, hist_len, num_bodies, 3]
+        # -‐> take max over history & bodies and threshold
+        contact = (
+            sensor.data.net_forces_w_history
+                  .norm(dim=-1)             # [N, hist_len, num_bodies]
+                  .max(dim=1)[0]            # max over hist_len
+                  .max(dim=1)[0]            # max over num_bodies
+                  > 1.0                     # bool [N]
+        )
+        # in‐phase if contact== (idx==stance_i)
+        ok = ~(contact ^ (stance_i == idx))
+        res += ok.float()
+
+    return res
+
+
+def foot_clearance_amber(
+    env: ManagerBasedRLEnv,
+    target_height: float,
+    left_sensor_name: str = "contact_forces_left",
+    right_sensor_name: str = "contact_forces_right",
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """
+    Penalize squared height‐error of each shin when it's off the ground.
+    Returns a [num_envs] tensor = err_left + err_right.
+    """
+    # grab the robot and the two shin contact sensors
+    asset: Articulation = env.scene[asset_cfg.name]
+    left_sensor  = env.scene.sensors[left_sensor_name]
+    right_sensor = env.scene.sensors[right_sensor_name]
+
+    # compute contact boolean per env (True = in contact)
+    def is_contact(sensor):
+        fh = sensor.data.net_forces_w_history  # [N, hist, bodies, 3]
+        # norm→max over history→max over bodies
+        return (
+            fh.norm(dim=-1)         # [N, hist, bodies]
+              .max(dim=1)[0]        # [N, bodies]
+              .max(dim=1)[0] > 1.0  # [N] bool
+        )
+
+    contact_l = is_contact(left_sensor)
+    contact_r = is_contact(right_sensor)
+
+    # get the body‐indices (each sensor attaches to one shin)
+    left_id,  = left_sensor.cfg.body_ids
+    right_id, = right_sensor.cfg.body_ids
+
+    # fetch z‐positions
+    z_l = asset.data.body_pos_w[:, left_id,  2]  # [N]
+    z_r = asset.data.body_pos_w[:, right_id, 2]  # [N]
+
+    # squared error from target, but only when **not** in contact
+    err_l = torch.square(z_l - target_height) * (~contact_l).float()
+    err_r = torch.square(z_r - target_height) * (~contact_r).float()
+
+    out = err_l + err_r  # [N]
+    # _check_nan("foot_clearance_amber", out)
+    return out
+
+
+def symmetric_phase_contact_amber(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    threshold: float,
+    period: float = 0.8,
+) -> torch.Tensor:
+    """
+    Reward exactly one shin in contact per gait‐phase, enforcing alternation.
+    Uses only the {contact_forces_left, contact_forces_right} sensors
+    and the sim clock (mod period).
+    Returns a [num_envs] tensor ∈ {0,1,2}.
+    """
+    # 1) grab the two sensors by name
+    left_s  = env.scene.sensors["contact_forces_left"]
+    right_s = env.scene.sensors["contact_forces_right"]
+
+    # 2) phase → stance index {0:left, 1:right}
+    tp       = (env.sim.current_time % period) / period
+    stance_i = 1 if math.sin(2*math.pi*tp) > 0 else 0
+
+    # 3) instant‐contact boolean for each foot
+    def in_contact(sensor):
+        fh = sensor.data.net_forces_w_history  # [N, hist, bodies, 3]
+        # → norm→max over history & bodies → bool[N]
+        return (
+            fh.norm(dim=-1)
+              .max(dim=1)[0]
+              .max(dim=1)[0]
+              > 1.0
+        )
+
+    contact_l = in_contact(left_s)
+    contact_r = in_contact(right_s)
+
+    # 4) sum up “correct” contacts
+    res = torch.zeros(env.num_envs, device=env.device)
+    for idx, contact in enumerate((contact_l, contact_r)):
+        # if idx==stance_i we *want* contact=True, else contact=False
+        ok = ~(contact ^ (idx == stance_i))
+        res += ok.float()
+
+    # 5) clamp by threshold & mask out zero‐speed cases
+    res = torch.clamp(res, max=threshold)
+    cmd = env.command_manager.get_command(command_name)[:, :2]
+    speed_mask = (torch.norm(cmd, dim=1) > 0.1).float()
+    out = res * speed_mask
+
+    # _check_nan("symmetric_phase_contact_amber", out)
+    return out
+
+
+def torso_rotation_cost(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["torso"]),
+) -> torch.Tensor:
+    """
+    Cost = squared rotation‐angle of the torso link away from world upright.
+    Assumes quaternion format [w, x, y, z] in asset.data.body_quat_w.
+    Returns a [num_envs] tensor of nonnegative costs.
+    """
+    # grab the articulation
+    asset = env.scene[asset_cfg.name]
+    # pick out the torso quaternion: shape [N, 1, 4] → [N, 4]
+    quat = asset.data.body_quat_w[:, asset_cfg.body_ids, :].squeeze(1)
+    # w is first component
+    w = quat[:, 0]
+    # clamp for acos domain stability
+    w = torch.clamp(w, -1.0, 1.0)
+    # rotation magnitude (rad): 2·acos(w)
+    angle = 2.0 * torch.acos(w)
+    # print(angle)
+    # squared penalty
+    cost = angle**2
+    return cost
+
+
+def foot_forward_placement_amber(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    threshold: float,
+    period: float = 0.8,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["left_shin","right_shin"]),
+) -> torch.Tensor:
+    """
+    Reward how far the stance shin is ahead of the swing shin along the robot's forward (x) axis.
+    Uses the phase clock to decide which foot is in stance.
+    Returns a [num_envs] tensor in [0, threshold].
+    """
+    # 1) get robot asset & shin‐link indices
+    asset     = env.scene[asset_cfg.name]
+    left_id, right_id = asset_cfg.body_ids
+
+    # 2) get world‐x positions of both shins: [N]
+    pos_w     = asset.data.body_pos_w  # [N, num_bodies, 3]
+    x_l       = pos_w[:, left_id,  0]
+    x_r       = pos_w[:, right_id, 0]
+    # print("left foot pos:",x_l)
+    # print("right foot pos",x_r)
+
+    # 3) compute stance foot index from the gait‐phase clock
+    tp        = (env.sim.current_time % period) / period
+    stance_i  = 1 if math.sin(2 * math.pi * tp) > 0 else 0
+
+    # 4) contact flags (only reward placement if foot is actually contacting)
+    def in_contact(sensor_name):
+        fh = env.scene.sensors[sensor_name].data.net_forces_w_history
+        # → bool [N]
+        return (fh.norm(dim=-1)
+                  .max(dim=1)[0]
+                  .max(dim=1)[0]
+                  > 1.0)
+
+    c_l = in_contact("contact_forces_left")
+    c_r = in_contact("contact_forces_right")
+
+    # 5) compute forward‐placement delta only for the stance foot when in contact
+    #    left stance: reward = max(0, x_l - x_r)
+    #    right stance: reward = max(0, x_r - x_l)
+    forward_delta = torch.where(
+        (stance_i == 0) & c_l, x_l - x_r,
+        torch.where((stance_i == 1) & c_r, x_r - x_l, torch.zeros_like(x_l))
+    )
+
+    # 6) clamp to [0, threshold]
+    out = torch.clamp(forward_delta, min=0.0, max=threshold)
+
+    # 7) mask out any zero‐speed steps (so we only reward when you're actually moving)
+    cmd = env.command_manager.get_command(command_name)[:, :2]
+    speed_mask = (torch.norm(cmd, dim=1) > 0.1).float()
+    res = out * speed_mask
+
+    # _check_nan("foot_forward_placement_amber", res)
+    return res
+
+
+def alternating_forward_step(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    threshold: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg(
+        "robot", body_names=["left_shin", "right_shin"]
+    ),
+    min_cmd_speed: float = 0.1,
+) -> torch.Tensor:
+    """
+    Reward when exactly one shin is in contact AND that shin is
+    ahead of the other along the commanded forward direction.
+    Returns [num_envs].
+    """
+    # 1) get robot & shin‐link indices
+    asset    = env.scene[asset_cfg.name]
+    right_id, left_id = asset_cfg.body_ids
+
+    # 2) shin world‐x positions
+    pos_w = asset.data.body_pos_w    # [N, num_bodies, 3]
+    x_l   = pos_w[:, left_id,  0]    # [N]
+    x_r   = pos_w[:, right_id, 0]    # [N]
+
+    # 3) instantaneous contact booleans
+    def in_contact(name):
+        fh = env.scene.sensors[name].data.net_forces_w_history  # [N, hist, bodies, 3]
+        return (
+            fh.norm(dim=-1)           # [N, hist, bodies]
+              .max(dim=1)[0]          # max over history → [N, bodies]
+              .max(dim=1)[0] > 1.0    # max over bodies → bool [N]
+        )
+
+    c_l = in_contact("contact_forces_left")
+    c_r = in_contact("contact_forces_right")
+    if torch.abs(c_l)>0.1:
+        print("x_l:",x_l)
+    if torch.abs(c_r)>0.1:
+        print("x_r:",x_r)
+    # 4) commanded forward/backward direction (x-axis)
+    cmd  = env.command_manager.get_command(command_name)[:, 0]  # [N]
+    dir  = torch.sign(cmd)                                      # {–1,0,1}
+    moving_mask = (torch.abs(cmd) > min_cmd_speed).float()      # [N]
+
+    # 5) per‐foot forward delta *in commanded dir*
+    delta_l = (x_l - x_r) * dir  # positive means left is ahead if dir>0
+    delta_r = (x_r - x_l) * dir
+
+    # 6) only one contact AND forward placement
+    ok_l = c_l & ~c_r & (delta_l > 0)
+    ok_r = c_r & ~c_l & (delta_r > 0)
+
+    # 7) build reward: distance stepped (clamped), masked by motion
+    r_l    = torch.where(ok_l, delta_l, torch.zeros_like(delta_l))
+    r_r    = torch.where(ok_r, delta_r, torch.zeros_like(delta_r))
+    reward = r_l + r_r
+    reward = torch.clamp(reward, max=threshold)
+    reward = reward * moving_mask
+
+    return reward

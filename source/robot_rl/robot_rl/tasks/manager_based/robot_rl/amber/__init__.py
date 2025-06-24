@@ -13,6 +13,17 @@ gym.register(
     },
 )
 
+gym.register(
+    id="Amber-rough-vel",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.amber_rough_env_cfg:AmberRoughEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:PPORunnerCfg",
+        "skrl_cfg_entry_point":   f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
 # If you make a LIP version:
 gym.register(
     id="Amber-flat-lip-vel",

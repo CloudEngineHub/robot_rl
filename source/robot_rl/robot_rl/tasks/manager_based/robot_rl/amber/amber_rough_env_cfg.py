@@ -16,7 +16,10 @@ from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
     RewardsCfg,
     EventCfg,
 )
+from isaaclab.managers import ObservationGroupCfg, ObservationTermCfg as ObsTerm
+
 import robot_rl.tasks.manager_based.robot_rl.amber.mdp as mdp
+from robot_rl.tasks.manager_based.robot_rl.amber.mdp.amber_obs import body_link_vel_xy
 
 # from robot_rl.tasks.manager_based.robot_rl.humanoid_env_cfg import HumanoidEnvCfg
 
@@ -27,13 +30,16 @@ from .amber_env_cfg import AmberEnvCfg
 from .amber5 import AMBER_CFG
 ##
 # Environment configuration
-##
+
 @configclass
 class AmberRoughEnvCfg(AmberEnvCfg):
     """Configuration for the G1 Flat environment."""
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
+        base_reset = self.events.reset_base
+        base_reset.params["pose_range"]["yaw"] = (0.0, 0.0)
+
         self.scene.robot = AMBER_CFG.replace(prim_path="{ENV_REGEX_NS}/Amber")
         self.scene.contact_forces = ContactSensorCfg(
             prim_path="{ENV_REGEX_NS}/Amber/amber3_PF/torso",
@@ -41,7 +47,35 @@ class AmberRoughEnvCfg(AmberEnvCfg):
             history_length=1,
             debug_vis=False,
         )
+        self.scene.contact_forces_right = ContactSensorCfg(
+            prim_path="{ENV_REGEX_NS}/Amber/amber3_PF/right_shin",
+            update_period=0.0,
+            history_length=1,
+            debug_vis=False,
+        )
+        self.scene.contact_forces_left = ContactSensorCfg(
+            prim_path="{ENV_REGEX_NS}/Amber/amber3_PF/left_shin",
+            update_period=0.0,
+            history_length=1,
+            debug_vis=False,
+        )
+        
+        
+        #-------------- Change the observations from base to a link based
+        self.observations.base_velocity = None
 
+
+        # add your custom XY-vel observation
+        self.observations.policy.body_link_vel_xy = ObsTerm(
+            func=body_link_vel_xy,
+            params={
+                "command_name": "base_velocity",       # whatever your command alias is
+                "asset_cfg": SceneEntityCfg(name="robot")
+            },
+            # you may need to set history_length, scale, etc.
+            history_length=1,
+            scale=1.0,
+        )
         ##
         # Scene
         ##
@@ -103,7 +137,7 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         # Rewards
         ##
         
-        self.rewards.track_lin_vel_xy_exp.weight = 1.0
+        self.rewards.track_lin_vel_xy_exp.weight = 1.2
         self.rewards.track_ang_vel_z_exp.weight = 0.5
         self.rewards.lin_vel_z_l2.weight =  -2.0 # TODO reduce this maybe?
         self.rewards.ang_vel_xy_l2.weight = -0.05
@@ -129,9 +163,26 @@ class AmberRoughEnvCfg(AmberEnvCfg):
 
         # self.rewards.height_torso.params["target_height"] = 0.75
         # self.rewards.feet_clearance.params["target_height"] = 0.12
+        self.rewards.joint_angles.weight        = 2   # e.g. half strength
+        self.rewards.joint_angles.params["std"] = 0.3   # narrower kernel
 
+        #phase following
+        # self.rewards.foot_phase_contact.weight            = 0.10
+        # self.rewards.foot_phase_contact.params["period"] = 0.8
+        #foot clearance
+        # self.rewards.foot_clearance.weight                 = 0.5
+        # self.rewards.foot_clearance.params["target_height"] = 0.08
+        #torso rotation reward
+        self.rewards.torso_rotation.weight = -1.5
 
+        #symmetric foot clearances
+        # self.rewards.symmetric_foot_airtime.weight            = 0.5
+        # self.rewards.symmetric_foot_airtime.params["threshold"] = 2
 
+        # forward feet placement:
+        # self.rewards.foot_forward_placement = 0.8
+        # forward and progressive foot placement:
+        # self.rewards.alternating_forward_step = 0.8
         # # -- Regularization
         # self.rewards.dof_torques_l2.weight = -1e-4                  # Joint torques
         # # self.rewards.torque_lim.weight = -1e-2                      # Torque limits

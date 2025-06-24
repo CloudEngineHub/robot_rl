@@ -15,7 +15,6 @@ from .amber_rough_env_cfg import AmberRoughEnvCfg
 ##
 # Pre-defined configs
 ##
-from .amber_env_cfg import AmberEnvCfg
 # from .amber_env import AmberFlatEnv
 ##
 # Environment configuration

@@ -15,7 +15,7 @@ from isaaclab_tasks.manager_based.locomotion.velocity.mdp import generated_comma
 
 from .rewards import *  # noqa: F401, F403
 from .observations import *  # noqa: F401, F403
-
+from .amber_obs import *
 
 # def generated_commands(env, command_name: str):
 #     """
