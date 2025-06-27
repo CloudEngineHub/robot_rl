@@ -54,6 +54,7 @@ ENVIRONMENTS = {
     "clf": "G1-flat-clf",
     "stair": "G1-stair",
     "height-scan-flat": "G1-height-scan-flat",
+    "rough": "G1-rough-clf",
 }
 
 

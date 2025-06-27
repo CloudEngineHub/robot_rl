@@ -57,8 +57,8 @@ class HumanoidObservationsCfg(ObservationsCfg):
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01), history_length=1)
 
         # Phase clock
-        sin_phase = ObsTerm(func=mdp.sin_phase, params={"period": PERIOD})
-        cos_phase = ObsTerm(func=mdp.cos_phase, params={"period": PERIOD})
+        sin_phase = ObsTerm(func=mdp.sin_phase, params={"command_name": PERIOD})
+        cos_phase = ObsTerm(func=mdp.cos_phase, params={"command_name": PERIOD})
 
     @configclass
     class CriticCfg(PolicyCfg):

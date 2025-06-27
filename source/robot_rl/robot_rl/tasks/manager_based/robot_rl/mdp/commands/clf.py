@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from scipy.linalg import solve_continuous_are
 
+
 class CLF:
     """
     Continuous-time Control Lyapunov Function (CLF) evaluator for relative-degree-2 outputs.
@@ -91,7 +92,7 @@ class CLF:
         y_err = y_act - y_nom
         dy_err = dy_act - dy_nom
         batch_size = y_act.shape[0]
-        eta = torch.zeros(batch_size,2*self.n_outputs, device=y_act.device)
+        eta = torch.zeros(batch_size, 2*self.n_outputs, device=y_act.device)
         eta[:,0::2] = y_err      # even indices: positions
         eta[:,1::2] = dy_err     # odd indices: velocities
 

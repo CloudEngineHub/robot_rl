@@ -24,13 +24,16 @@
 
 import argparse
 import glob
+import subprocess
 import os
 import pickle
 import sys
 import time
 from dataclasses import dataclass
 from typing import List, Sequence
+import matplotlib.pyplot as plt
 
+import torch
 from isaaclab.app import AppLauncher
 import cli_args
 
@@ -62,40 +65,45 @@ EXPERIMENT_NAMES = {
 #  Simple data-logger                                                           #
 # -----------------------------------------------------------------------------#
 
+# -------------------------------------------------------------
+#  Hard-wired DataLogger  (records base_velocity + root_pos)
+# -------------------------------------------------------------
+import torch, pickle, os
+
+
 class DataLogger:
-    def __init__(self, enabled=True, log_dir=None, variables=None):
+    def __init__(self, enabled=True, log_dir=None):
         self.enabled = enabled
-        self.data = {}
         self.log_dir = log_dir
-        self.variables = variables or []
-        
+        self.data = {"base_velocity": [], "root_pos": []}
+
         if enabled and log_dir:
             os.makedirs(log_dir, exist_ok=True)
-            print(f"[INFO] Logging data to directory: {log_dir}")
-            # Initialize data storage for each variable
-            for var in self.variables:
-                self.data[var] = []
-    
-    def log_from_dict(self, data_dict):
-        """Log data from a dictionary, only logging variables that were specified in initialization"""
+            print(f"[INFO] Logging data to {log_dir}")
+
+    # ------------------------------------------------------------------
+    def log_step(self, base_vel, root_pos):
+        """Append one timestep of data (tensors or arrays)."""
         if not self.enabled:
             return
-            
-        for var in self.variables:
-            if var in data_dict:
-                self.data[var].append(data_dict[var])
-    
+        self.data["base_velocity"].append(base_vel)
+        self.data["root_pos"].append(root_pos)
+
+    # ------------------------------------------------------------------
     def save(self):
-        """Save all logged data to pickle files"""
-        if not self.enabled or not self.log_dir:
+        if not (self.enabled and self.log_dir):
             return
-            
-        for var in self.variables:
-            if var in self.data:
-                filepath = os.path.join(self.log_dir, f"{var}.pkl")
-                with open(filepath, "wb") as f:
-                    pickle.dump(self.data[var], f)
-                print(f"[INFO] Saved {var} data to {filepath}")
+
+        for var, entries in self.data.items():
+            cleaned = [
+                x.detach().cpu().tolist() if isinstance(x, torch.Tensor) else x
+                for x in entries
+            ]
+            path = os.path.join(self.log_dir, f"{var}.pkl")
+            with open(path, "wb") as fh:
+                pickle.dump(cleaned, fh)
+            print(f"[INFO] Saved '{var}' to {path}")
+
 
 
 # -----------------------------------------------------------------------------#
@@ -147,6 +155,9 @@ def get_args():
     # export network
     p.add_argument("--export_policy", action="store_true", default=False)
 
+    p.add_argument("--plot_graphs", action="store_true", default=False,
+                   help="After playback, draw 6 graphs from the logger .pkl files.")
+
     # passthrough
     cli_args.add_rsl_rl_args(p)
     AppLauncher.add_app_launcher_args(p)
@@ -169,17 +180,135 @@ def newest_run(exp_root: str) -> str | None:
     return max(runs, key=os.path.getmtime) if runs else None
 
 
+def make_comparison_plots(play_dirs: list[str]) -> None:
+    import pickle
+
+    base_keys = ["vx", "vy", "vz", "root_x", "root_y", "root_z"]
+    titles    = ["Velocity X", "Velocity Y", "Velocity Z",
+                 "Root X",     "Root Y",     "Root Z"]
+
+    series = {k: [] for k in base_keys}
+
+    # read every run’s pickles -----------------------------------------
+    for play_dir in play_dirs:
+        label = os.path.basename(os.path.dirname(play_dir))   # “run_A”, …
+        with open(os.path.join(play_dir, "base_velocity.pkl"), "rb") as fh:
+            vel_raw = pickle.load(fh)
+        with open(os.path.join(play_dir, "root_pos.pkl"), "rb") as fh:
+            pos_raw = pickle.load(fh)
+
+        vel = torch.tensor(vel_raw).mean(dim=1)   # (T,3)
+        pos = torch.tensor(pos_raw).mean(dim=1)   # (T,3)
+
+        for i, k in enumerate(("vx", "vy", "vz")):
+            series[k].append((label, vel[:, i].tolist()))
+        for i, k in enumerate(("root_x", "root_y", "root_z")):
+            series[k].append((label, pos[:, i].tolist()))
+
+    # one figure per component -----------------------------------------
+    suffix = "_".join(os.path.basename(os.path.dirname(d)) for d in play_dirs)
+    out_dir = os.path.join(os.getcwd(), "comparison_plots")
+    os.makedirs(out_dir, exist_ok=True)
+
+    for key, title in zip(base_keys, titles):
+        plt.figure()
+        for lbl, data in series[key]:
+            plt.plot(data, label=lbl)
+        plt.xlabel("timestep")
+        plt.ylabel(title)
+        plt.title(title)
+        plt.legend()
+        outfile = os.path.join(out_dir, f"{key}_{suffix}.png")
+        plt.savefig(outfile, dpi=150, bbox_inches="tight")
+        plt.close()
+        print(f"[INFO] Plot saved → {outfile}")
+
+
+def find_all_play_dirs(active_run_dir: str) -> list[str]:
+    """
+    Return every sibling “…/playback” directory (including *this* run) that
+    already contains both base_velocity.pkl and root_pos.pkl.  They all live
+    one level above the timestamped run directory.
+    """
+    parent_dir = os.path.dirname(active_run_dir)         # …/g1/<runs…>/
+    play_dirs: list[str] = []
+
+    for entry in os.scandir(parent_dir):
+        if not entry.is_dir():
+            continue
+        cand = os.path.join(entry.path, "playback")
+        if os.path.isfile(os.path.join(cand, "base_velocity.pkl")) and \
+           os.path.isfile(os.path.join(cand, "root_pos.pkl")):
+            play_dirs.append(cand)
+
+    return sorted(play_dirs)
+
+
+
 # -----------------------------------------------------------------------------#
 #  Main                                                                         #
 # -----------------------------------------------------------------------------#
 
 
-def main():
+# -----------------------------------------------------------------------------#
+#  Main                                                                         #
+# -----------------------------------------------------------------------------#
+def main() -> None:
     args, hydra_tail = get_args()
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # 1) Detect whether we were given more than one policy checkpoint
+    # ─────────────────────────────────────────────────────────────────────────
+    multi_run = len(args.policy_paths or []) > 1
+
+    # Flags that every (sub-)process should receive
+    common_flags = [
+        "--env_type", args.env_type,
+        "--log_data",           # guarantees that *.pkl files are written out
+    ]
+
+    # In the single-policy case we can show graphs immediately
+    if not multi_run and args.plot_graphs:
+        common_flags.append("--plot_graphs")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 2) Multi-policy sweep: spawn this very script once per checkpoint,
+    #    wait for them to finish, then generate the combined plots and exit.
+    # ─────────────────────────────────────────────────────────────────────────
+    if multi_run:
+        play_dirs: list[str] = []
+
+        for ckpt in args.policy_paths:
+            run_dir  = os.path.dirname(ckpt)
+            out_dir  = os.path.join(run_dir, "playback")
+            play_dirs.append(out_dir)
+
+            cmd = [
+                sys.executable,
+                os.path.abspath(__file__),     # recursively call *this* script
+                "--policy_paths", ckpt,        # one checkpoint at a time
+                "--play_log_dir", out_dir,     # write logs to that folder
+                *common_flags,
+            ]
+            subprocess.run(cmd, check=True)
+
+        # once all children have finished we can aggregate their logs
+        if args.plot_graphs:
+            make_comparison_plots(play_dirs)
+
+        # important: prevent the parent from running the single-policy logic
+        sys.exit(0)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 3) Single-policy run — continue with the original code path
+    # ─────────────────────────────────────────────────────────────────────────
+    # (Everything below this point is unchanged from your original file)
+    # -----------------------------------------------------------------------
     # Absolute path to play root (logs/…)
     exp_name = args.exp_name or EXPERIMENT_NAMES[args.env_type]
-    exp_root = os.path.abspath(os.path.join("logs", "g1_policies", args.env_type, exp_name))
+    exp_root = os.path.abspath(
+        os.path.join("logs", "g1_policies", args.env_type, exp_name)
+    )
 
     # ------------------------------------------------------------------#
     #  Resolve list of checkpoints                                      #
@@ -195,7 +324,7 @@ def main():
             sys.exit(f"[ERROR] No checkpoints in latest run {run_dir}")
         ckpts = [ckpt]
 
-    # sanity
+    # sanity-check paths
     for c in ckpts:
         if not os.path.exists(c):
             sys.exit(f"[ERROR] Checkpoint not found: {c}")
@@ -205,8 +334,8 @@ def main():
     # ------------------------------------------------------------------#
     sys.argv = [sys.argv[0]] + hydra_tail  # so hydra sees only its args
     if args.video:
-    # AppLauncher looks for this flag – if True it spawns camera sensors
-        args.enable_cameras = True
+        args.enable_cameras = True  # AppLauncher flag
+
     app = AppLauncher(args).app
 
     # late imports
@@ -299,8 +428,8 @@ def main():
             export_policy_as_onnx(policy_net, runner.obs_normalizer, export_dir, "policy.onnx")
 
         # data logger
-        log_vars = ["base_velocity"]
-        logger = DataLogger(enabled=args.log_data, log_dir=play_dir, variables=log_vars)
+        log_vars = ["base_velocity", "robot"]
+        logger = DataLogger(enabled=args.log_data or args.plot_graphs, log_dir=play_dir)
 
         # ------------------------------------------------------------------#
         #  Simulation loop                                                  #
@@ -316,7 +445,9 @@ def main():
                 obs, _, _, info = env.step(act)
                 if args.log_data:
                     # minimal example; extend as needed
-                    logger.log_from_dict({"base_velocity": info.get("commanded_velocity")})
+                    cmd_vel = env.unwrapped.command_manager.get_command("base_velocity")
+                    root_pos = env.unwrapped.scene["robot"].data.root_pos_w
+                    logger.log_step(cmd_vel.clone(), root_pos.clone())
 
             frame += 1
             if args.video and frame >= args.video_length:
@@ -328,17 +459,22 @@ def main():
                 time.sleep(max(0.0, dt - (time.time() - tic)))
 
         env.close()
+
         if args.log_data:
             logger.save()
+            
+        if args.plot_graphs:
+            play_dirs_ready = find_all_play_dirs(run_dir)
 
-    # ------------------------------------------------------------------#
-    #  Shutdown                                                         #
-    # ------------------------------------------------------------------#
+            if len(play_dirs_ready) >= 2:
+                # overwrite / refresh the 6 composite figures
+                make_comparison_plots(play_dirs_ready)
+            elif len(play_dirs_ready) == 1:
+                # still useful to have single-run plots while waiting
+                make_comparison_plots(play_dirs_ready)
+
     app.close()
     print("\nAll playbacks done.")
-
-
-# -----------------------------------------------------------------------------#
 
 if __name__ == "__main__":
     main()
