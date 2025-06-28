@@ -29,6 +29,7 @@ from source.robot_rl.robot_rl.tasks.manager_based.robot_rl.g1.g1_observation imp
 @configclass
 class G1RoughLipCommandsCfg(HumanoidCommandsCfg):
     """Commands for the G1 Flat environment."""   
+    step_period = mdp.commands.GaitPeriodCfg(period_range=(0.8, 0.8), resampling_time_range=(10.0, 10.0))
     hlip_ref = HLIPCommandCfg()
 
 
@@ -77,6 +78,7 @@ class G1RoughLipRewards(HumanoidRewardCfg):
         params={
             "command_name": "hlip_ref",
             "max_clf_decreasing": 200.0,
+            "alpha": 1.0,
         }
     )
 
@@ -202,3 +204,21 @@ class G1RoughLipEnvCfg(HumanoidEnvCfg):
         # self.rewards.flat_orientation_l2.weight = -1.0
         # self.rewards.height_torso.params["target_height"] = 0.75
         # self.rewards.feet_clearance.params["target_height"] = 0.12
+        
+class G1RoughLipEnvCfg_PLAY(G1RoughLipEnvCfg):
+    def __post_init__(self) -> None:
+        # post init of parent
+        super().__post_init__()
+
+        # make a smaller scene for play
+        self.scene.num_envs = 2
+        self.scene.env_spacing = 2.5
+        # disable randomization for play
+        self.observations.policy.enable_corruption = False
+        # remove random pushing
+        self.events.base_external_force_torque = None
+        # self.events.push_robot = None
+        self.events.push_robot.interval_range_s = (5.0,5.0)
+        self.events.reset_base.params["pose_range"] = {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (0,0)} #(-3.14, 3.14)},
+        self.scene.terrain.terrain_generator.num_rows = 1
+        self.scene.terrain.terrain_generator.num_cols = 2

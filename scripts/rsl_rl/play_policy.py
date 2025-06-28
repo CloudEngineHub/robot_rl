@@ -8,16 +8,16 @@
 #  Usage (single policy)
 #  ---------------------
 #  python play_policy.py \
-#      --policy_paths logs/g1_policies/custom/g1/run_A/model_400.pt \
-#      --env_type custom --video
+#       --policy_paths logs/g1_policies/custom/g1/run_A/model_400.pt \
+#       --env_type custom --video
 #
 #  Usage (multiple policies, headless)
 #  -----------------------------------
 #  python play_policy.py \
-#      --policy_paths \
-#          logs/g1_policies/custom/g1/run_A/model_400.pt \
-#          logs/g1_policies/custom/g1/run_B/model_600.pt \
-#      --env_type custom --headless --video_length 600
+#       --policy_paths \
+#           logs/g1_policies/custom/g1/run_A/model_400.pt \
+#           logs/g1_policies/custom/g1/run_B/model_600.pt \
+#       --env_type custom --headless --video_length 600
 #
 #  Any extra RSL-RL / AppLauncher flags may be appended as usual.
 # =============================================================================
@@ -38,7 +38,7 @@ from isaaclab.app import AppLauncher
 import cli_args
 
 # -----------------------------------------------------------------------------#
-#  Constants                                                                    #
+#  Constants                                                                   #
 # -----------------------------------------------------------------------------#
 
 SIM_ENVIRONMENTS = {
@@ -49,6 +49,7 @@ SIM_ENVIRONMENTS = {
     "clf_vdot": "G1-flat-ref-play",
     "stair": "G1-stair-play",
     "height-scan-flat": "G1-height-scan-flat-play",
+    "rough": "G1-rough-clf-play",
 }
 
 EXPERIMENT_NAMES = {
@@ -59,14 +60,11 @@ EXPERIMENT_NAMES = {
     "clf_vdot": "g1",
     "stair": "g1",
     "height-scan-flat": "g1",
+    "rough": "g1",
 }
 
-# -----------------------------------------------------------------------------#
-#  Simple data-logger                                                           #
-# -----------------------------------------------------------------------------#
-
 # -------------------------------------------------------------
-#  Hard-wired DataLogger  (records base_velocity + root_pos)
+#  Hard-wired DataLogger  (records base_velocity, root_pos, and root_velocity)
 # -------------------------------------------------------------
 import torch, pickle, os
 
@@ -75,19 +73,20 @@ class DataLogger:
     def __init__(self, enabled=True, log_dir=None):
         self.enabled = enabled
         self.log_dir = log_dir
-        self.data = {"base_velocity": [], "root_pos": []}
+        self.data = {"base_velocity": [], "root_pos": [], "root_velocity": []}
 
         if enabled and log_dir:
             os.makedirs(log_dir, exist_ok=True)
             print(f"[INFO] Logging data to {log_dir}")
 
     # ------------------------------------------------------------------
-    def log_step(self, base_vel, root_pos):
+    def log_step(self, base_vel, root_pos, root_vel):
         """Append one timestep of data (tensors or arrays)."""
         if not self.enabled:
             return
         self.data["base_velocity"].append(base_vel)
         self.data["root_pos"].append(root_pos)
+        self.data["root_velocity"].append(root_vel)
 
     # ------------------------------------------------------------------
     def save(self):
@@ -107,7 +106,7 @@ class DataLogger:
 
 
 # -----------------------------------------------------------------------------#
-#  CLI                                                                          #
+#  CLI                                                                         #
 # -----------------------------------------------------------------------------#
 
 
@@ -156,7 +155,7 @@ def get_args():
     p.add_argument("--export_policy", action="store_true", default=False)
 
     p.add_argument("--plot_graphs", action="store_true", default=False,
-                   help="After playback, draw 6 graphs from the logger .pkl files.")
+                         help="After playback, draw graphs from the logger .pkl files.")
 
     # passthrough
     cli_args.add_rsl_rl_args(p)
@@ -166,7 +165,7 @@ def get_args():
 
 
 # -----------------------------------------------------------------------------#
-#  Helpers                                                                      #
+#  Helpers                                                                     #
 # -----------------------------------------------------------------------------#
 
 
@@ -181,44 +180,107 @@ def newest_run(exp_root: str) -> str | None:
 
 
 def make_comparison_plots(play_dirs: list[str]) -> None:
+    """
+    Calculates, saves, and plots statistics (mean and std. dev.) for policy playback.
+    """
     import pickle
+    import matplotlib.pyplot as plt
+    import numpy as np
 
-    base_keys = ["vx", "vy", "vz", "root_x", "root_y", "root_z"]
-    titles    = ["Velocity X", "Velocity Y", "Velocity Z",
-                 "Root X",     "Root Y",     "Root Z"]
+    # --- IMPORTANT ---
+    # This DT must match the simulation dt in your environment configuration
+    # for the position integration to be accurate. Common values are 0.02 (50Hz)
+    # or 0.01 (100Hz). You can find it in your main loop via `env.unwrapped.step_dt`.
+    DT = 0.02
 
-    series = {k: [] for k in base_keys}
-
-    # read every run’s pickles -----------------------------------------
+    # --- Data Loading & Statistics Calculation ---
+    all_stats_data = {}
     for play_dir in play_dirs:
-        label = os.path.basename(os.path.dirname(play_dir))   # “run_A”, …
-        with open(os.path.join(play_dir, "base_velocity.pkl"), "rb") as fh:
-            vel_raw = pickle.load(fh)
-        with open(os.path.join(play_dir, "root_pos.pkl"), "rb") as fh:
-            pos_raw = pickle.load(fh)
+        label = os.path.basename(os.path.dirname(play_dir)) # "run_A", etc.
+        try:
+            # Load raw data from pickle files
+            with open(os.path.join(play_dir, "base_velocity.pkl"), "rb") as fh:
+                vel_raw = torch.tensor(pickle.load(fh))
+            with open(os.path.join(play_dir, "root_pos.pkl"), "rb") as fh:
+                pos_raw = torch.tensor(pickle.load(fh))
+            with open(os.path.join(play_dir, "root_velocity.pkl"), "rb") as fh:
+                root_vel_raw = torch.tensor(pickle.load(fh))
 
-        vel = torch.tensor(vel_raw).mean(dim=1)   # (T,3)
-        pos = torch.tensor(pos_raw).mean(dim=1)   # (T,3)
+            # Calculate mean and std deviation across the environment dimension (dim=1)
+            stats = {
+                "cmd_vel_mean": vel_raw.mean(dim=1),
+                "cmd_vel_std": vel_raw.std(dim=1),
+                "root_pos_mean": pos_raw.mean(dim=1),
+                "root_pos_std": pos_raw.std(dim=1),
+                "root_vel_mean": root_vel_raw.mean(dim=1),
+                "root_vel_std": root_vel_raw.std(dim=1),
+            }
 
-        for i, k in enumerate(("vx", "vy", "vz")):
-            series[k].append((label, vel[:, i].tolist()))
-        for i, k in enumerate(("root_x", "root_y", "root_z")):
-            series[k].append((label, pos[:, i].tolist()))
+            # Integrate commanded velocity to get commanded position
+            linear_cmd_vel = torch.stack([stats["cmd_vel_mean"][:, 0], stats["cmd_vel_mean"][:, 1], torch.zeros_like(stats["cmd_vel_mean"][:, 0])], dim=1)
+            stats["cmd_pos_mean"] = torch.cumsum(linear_cmd_vel * DT, dim=0)
+            # Note: Std. dev. of integrated velocity is more complex, so we'll plot std. dev. of final position instead.
+            stats["cmd_pos_std"] = torch.zeros_like(stats["root_pos_std"]) # Placeholder
 
-    # one figure per component -----------------------------------------
-    suffix = "_".join(os.path.basename(os.path.dirname(d)) for d in play_dirs)
+            all_stats_data[label] = stats
+
+            # Save the calculated statistics to a new file
+            stats_path = os.path.join(play_dir, "statistics.pkl")
+            # Convert tensors to lists for pickling
+            stats_to_save = {k: v.cpu().numpy().tolist() for k, v in stats.items()}
+            with open(stats_path, "wb") as fh:
+                pickle.dump(stats_to_save, fh)
+            print(f"[INFO] Statistics saved to {stats_path}")
+
+        except FileNotFoundError as e:
+            print(f"[WARNING] Could not load data for '{label}': {e}. Skipping this run.")
+            continue
+
+    if not all_stats_data:
+        print("[ERROR] No data found to plot.")
+        return
+
+    # --- Plotting ---
+    suffix = "_".join(sorted(all_stats_data.keys()))
     out_dir = os.path.join(os.getcwd(), "comparison_plots")
     os.makedirs(out_dir, exist_ok=True)
 
-    for key, title in zip(base_keys, titles):
-        plt.figure()
-        for lbl, data in series[key]:
-            plt.plot(data, label=lbl)
-        plt.xlabel("timestep")
-        plt.ylabel(title)
+    # Plot definitions: (filename_key, title, list_of_series_to_plot)
+    # Each series is a tuple of (mean_key, std_key, axis_index, legend_label)
+    plot_definitions = [
+        ("x_vel", "X Velocity", [("cmd_vel", 0, "Cmd"), ("root_vel", 0, "Actual")]),
+        ("y_vel", "Y Velocity", [("cmd_vel", 1, "Cmd"), ("root_vel", 1, "Actual")]),
+        ("z_vel", "Z Velocity", [("root_vel", 2, "Actual")]),
+        ("x_pos", "X Position", [("cmd_pos", 0, "Cmd"), ("root_pos", 0, "Actual")]),
+        ("y_pos", "Y Position", [("cmd_pos", 1, "Cmd"), ("root_pos", 1, "Actual")]),
+        ("z_pos", "Z Position", [("root_pos", 2, "Actual")]),
+    ]
+
+    for f_key, title, series_list in plot_definitions:
+        plt.figure(figsize=(10, 6))
         plt.title(title)
+        
+        for run_label, stats in all_stats_data.items():
+            for data_key, index, legend_suffix in series_list:
+                mean_key = f"{data_key}_mean"
+                std_key = f"{data_key}_std"
+                
+                mean_data = np.array(stats[mean_key])[:, index]
+                std_data = np.array(stats[std_key])[:, index]
+                
+                line_label = f"{run_label} {legend_suffix}".strip()
+                
+                # Plot the mean line
+                line, = plt.plot(mean_data, label=line_label)
+                # Plot the shaded standard deviation region
+                plt.fill_between(range(len(mean_data)), mean_data - std_data, mean_data + std_data, color=line.get_color(), alpha=0.2)
+
+        plt.xlabel("Timestep")
+        plt.ylabel("Value")
         plt.legend()
-        outfile = os.path.join(out_dir, f"{key}_{suffix}.png")
+        plt.grid(True)
+        
+        outfile = os.path.join(out_dir, f"{f_key}_{suffix}.png")
         plt.savefig(outfile, dpi=150, bbox_inches="tight")
         plt.close()
         print(f"[INFO] Plot saved → {outfile}")
@@ -227,10 +289,10 @@ def make_comparison_plots(play_dirs: list[str]) -> None:
 def find_all_play_dirs(active_run_dir: str) -> list[str]:
     """
     Return every sibling “…/playback” directory (including *this* run) that
-    already contains both base_velocity.pkl and root_pos.pkl.  They all live
+    already contains all required .pkl files. They all live
     one level above the timestamped run directory.
     """
-    parent_dir = os.path.dirname(active_run_dir)         # …/g1/<runs…>/
+    parent_dir = os.path.dirname(active_run_dir)          # …/g1/<runs…>/
     play_dirs: list[str] = []
 
     for entry in os.scandir(parent_dir):
@@ -238,7 +300,8 @@ def find_all_play_dirs(active_run_dir: str) -> list[str]:
             continue
         cand = os.path.join(entry.path, "playback")
         if os.path.isfile(os.path.join(cand, "base_velocity.pkl")) and \
-           os.path.isfile(os.path.join(cand, "root_pos.pkl")):
+           os.path.isfile(os.path.join(cand, "root_pos.pkl")) and \
+           os.path.isfile(os.path.join(cand, "root_velocity.pkl")):
             play_dirs.append(cand)
 
     return sorted(play_dirs)
@@ -246,12 +309,12 @@ def find_all_play_dirs(active_run_dir: str) -> list[str]:
 
 
 # -----------------------------------------------------------------------------#
-#  Main                                                                         #
+#  Main                                                                        #
 # -----------------------------------------------------------------------------#
 
 
 # -----------------------------------------------------------------------------#
-#  Main                                                                         #
+#  Main                                                                        #
 # -----------------------------------------------------------------------------#
 def main() -> None:
     args, hydra_tail = get_args()
@@ -264,7 +327,7 @@ def main() -> None:
     # Flags that every (sub-)process should receive
     common_flags = [
         "--env_type", args.env_type,
-        "--log_data",           # guarantees that *.pkl files are written out
+        "--log_data",              # guarantees that *.pkl files are written out
     ]
 
     # In the single-policy case we can show graphs immediately
@@ -404,7 +467,7 @@ def main() -> None:
         runner_cfg: RslRlOnPolicyRunnerCfg = cli_args.parse_rsl_rl_cfg(task_name, args)
         # Determine a numeric clipping bound (or None)
         clip_val = runner_cfg.clip_actions
-        if isinstance(clip_val, bool):          # True → default to 1.0, False → None
+        if isinstance(clip_val, bool):      # True → default to 1.0, False → None
             clip_val = 1.0 if clip_val else None
 
         env = RslRlVecEnvWrapper(env, clip_actions=clip_val)
@@ -428,13 +491,12 @@ def main() -> None:
             export_policy_as_onnx(policy_net, runner.obs_normalizer, export_dir, "policy.onnx")
 
         # data logger
-        log_vars = ["base_velocity", "robot"]
         logger = DataLogger(enabled=args.log_data or args.plot_graphs, log_dir=play_dir)
 
         # ------------------------------------------------------------------#
         #  Simulation loop                                                  #
         # ------------------------------------------------------------------#
-        obs, _ = env.reset()               # ← kicks-off recording
+        obs, _ = env.reset()          # ← kicks-off recording
         obs, _ = env.get_observations()
         dt = env.unwrapped.step_dt
         frame = 0
@@ -447,7 +509,8 @@ def main() -> None:
                     # minimal example; extend as needed
                     cmd_vel = env.unwrapped.command_manager.get_command("base_velocity")
                     root_pos = env.unwrapped.scene["robot"].data.root_pos_w
-                    logger.log_step(cmd_vel.clone(), root_pos.clone())
+                    root_vel = env.unwrapped.scene["robot"].data.root_lin_vel_w
+                    logger.log_step(cmd_vel.clone(), root_pos.clone(), root_vel.clone())
 
             frame += 1
             if args.video and frame >= args.video_length:

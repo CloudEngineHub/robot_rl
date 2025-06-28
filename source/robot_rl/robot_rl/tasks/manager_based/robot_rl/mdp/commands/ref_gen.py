@@ -172,72 +172,139 @@ def coth(x: torch.Tensor) -> torch.Tensor:
 
 class HLIP(torch.nn.Module):
     """Hybrid Linear Inverted Pendulum implementation using PyTorch."""
-
-    def __init__(self, grav: float, z0: float, T_ds: float, T: float, y_nom: float):
+    def __init__(self, grav: torch.Tensor, z0: float, T_ds: float, T: torch.Tensor, y_nom: float):
+        """
+        Initializes the Hybrid Linear Inverted Pendulum (HLIP) controller.
+        """
         super().__init__()
-        # Store physical constants
+        # Store properties
         self.grav = grav
         self.z0 = z0
         self.y_nom = y_nom
-        self.lambda_ = torch.sqrt(torch.tensor(grav / z0, device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')))
-        
-        # Get device from grav tensor
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
-        # Initialize and store constant matrices on the correct device
-        self.A_ss = torch.tensor([[0.0, 1.0], [grav / z0, 0.0]], device=device)
-        self.A_ds = torch.tensor([[0.0, 1.0], [0.0, 0.0]], device=device)
-        self.B_usw = torch.tensor([-1.0, 0.0], device=device)
-
         self.T_ds = T_ds
         self.T = T
-        self._compute_s2s_matrices()
+        self.device = grav.device
+        self.num_envs = grav.shape[0]
 
+        self.lambda_ = torch.sqrt(self.grav / self.z0)
+
+        # -- START OF FIX --
+        # Build state-space matrices as BATCHED tensors from the start.
+        # Shape: (num_envs, 2, 2)
+        # Build state-space matrices as BATCHED tensors from the start.
+        # Shape: (num_envs, 2, 2)
+        self.A_ss = torch.zeros(self.num_envs, 2, 2, device=self.device)
+        self.A_ss[:, 0, 1] = 1.0
+        self.A_ss[:, 1, 0] = self.lambda_**2
+
+        # A_ds is CONSTANT across all envs, so it should be a single 2D matrix.
+        self.A_ds = torch.tensor([[0.0, 1.0], [0.0, 0.0]], device=self.device)
+
+        # B_usw depends on lambda_, so it MUST be batched.
+        # Shape: (num_envs, 2, 1)
+        self.B_usw = torch.zeros(self.num_envs, 2, 1, device=self.device)
+        self.B_usw[:, 1, 0] = -self.lambda_**2
+        # -- END OF FIX --
+        
+        # This can now be called safely
+        self._compute_s2s_matrices()
     def _compute_s2s_matrices(self) -> None:
         """Compute and store step-to-step A and B matrices."""
         # Matrices are already on the correct device from __init__
-        exp_ss = torch.matrix_exp(self.A_ss * (self.T - self.T_ds))
+
+        # Reshape the scalar part of the expression to allow for broadcasting.
+        scalar_term = (self.T - self.T_ds).view(-1, 1, 1)
+
+        # Create a batched A_ss matrix of shape (num_envs, 2, 2).
+        batched_A_ss = self.A_ss * scalar_term
+        
+        # exp_ss now has shape (num_envs, 2, 2).
+        exp_ss = torch.matrix_exp(batched_A_ss)
+
+        # exp_ds is a single (2, 2) matrix.
         exp_ds = torch.matrix_exp(self.A_ds * self.T_ds)
-        self.A_s2s = exp_ss @ exp_ds
-        self.B_s2s = exp_ss @ self.B_usw
+        
+        num_envs = exp_ss.shape[0]
+        
+        # To multiply with the batched exp_ss, we must expand the single exp_ds matrix
+        # Shape: (2, 2) -> (1, 2, 2) -> (num_envs, 2, 2)
+        batched_exp_ds = exp_ds.unsqueeze(0).expand(num_envs, -1, -1)
+        
+        # bmm requires both tensors to be batched
+        self.A_s2s = torch.bmm(exp_ss, batched_exp_ds)
+        
+        # B_usw is already batched from __init__, so we can use it directly
+        self.B_s2s = torch.bmm(exp_ss, self.B_usw)
+        # -- END OF FIX --
+        
+        # Note: The redundant lines at the end have been removed.
 
-    def _remap_for_init_stance_state(
-        self, X_des_p1: Tensor, Y_des_p2: Tensor, Ux: float, Uy: Tensor
-    ) -> Tuple[Tensor, Tensor]:
-        """Remap the desired state for the initial stance state."""
-        # Create tensors on the correct device
-        Y_left = torch.cat([
-            (Y_des_p2[:, 1, 0] - Uy[:, 1]).unsqueeze(-1),
-            Y_des_p2[:, 1, 1].unsqueeze(-1)
-        ], dim=-1)  # [batch, 2]
-        
-        Y_right = torch.cat([
-            (Y_des_p2[:, 0, 0] - Uy[:, 0]).unsqueeze(-1),
-            Y_des_p2[:, 0, 1].unsqueeze(-1)
-        ], dim=-1)  # [batch, 2]
-        
-        X0 = torch.cat([
-            (X_des_p1[:, 0] - Ux).unsqueeze(-1),
-            X_des_p1[:, 1].unsqueeze(-1)
-        ], dim=-1)  # [batch, 2]
-        
-        return X0, torch.cat([Y_left.unsqueeze(1), Y_right.unsqueeze(1)], dim=1)  # [batch, 2, 2]
-
-    def _compute_desire_com_trajectory(
-        self, cur_time: float, Xdesire: Tensor
-    ) -> Tuple[Tensor, Tensor]:
-        """Compute desired COM trajectory relative to stance foot.
-        Args:
-            cur_time: float, current time
-            Xdesire: Tensor of shape [batch, 2] containing initial position and velocity
-        Returns:
-            Tuple of (position, velocity) tensors, each of shape [batch]
+    def _remap_for_init_stance_state(self, Xdes, Ydes, Ux, Uy):
         """
-        x0, v0 = Xdesire[:, 0], Xdesire[:, 1]  # [batch]
-        lam = self.lambda_
-        pos = x0 * torch.cosh(lam * cur_time) + (v0 / lam) * torch.sinh(lam * cur_time)  # [batch]
-        vel = x0 * lam * torch.sinh(lam * cur_time) + v0 * torch.cosh(lam * cur_time)  # [batch]
-        return pos, vel
+        Remaps the desired states for the next step to be the initial states for the
+        two feet, which is used for legged robots.
+
+        This function calculates the state [pos, vel] for the next stance leg and next swing leg.
+        """
+        # -- START OF THE FINAL FIX --
+
+        # 1. Calculate the state [pos, vel] for the next stance leg (current swing leg)
+        # pos = current swing foot pos relative to new stance foot = X_des - u_sw
+        # vel = current swing foot vel relative to new stance foot = V_des
+        x_pos_stance_next = Xdes[:, 0, 0] - Ux
+        x_vel_stance_next = Xdes[:, 1, 0]
+        # Stack them into a (batch, 2) tensor
+        x_init_stance_next = torch.stack((x_pos_stance_next, x_vel_stance_next), dim=1)
+
+        y_pos_stance_next = Ydes[:, 0, 0] - Uy
+        y_vel_stance_next = Ydes[:, 1, 0]
+        y_init_stance_next = torch.stack((y_pos_stance_next, y_vel_stance_next), dim=1)
+
+
+        # 2. Calculate the state [pos, vel] for the next swing leg (current stance leg)
+        # pos = current stance foot pos relative to new stance foot = -u_sw
+        # vel = current stance foot vel relative to new stance foot = -V_des
+        x_pos_swing_next = -Xdes[:, 0, 0] + Ux
+        x_vel_swing_next = -Xdes[:, 1, 0]
+        # Stack them into a (batch, 2) tensor
+        x_init_swing_next = torch.stack((x_pos_swing_next, x_vel_swing_next), dim=1)
+
+        y_pos_swing_next = -Ydes[:, 0, 0] + Uy
+        y_vel_swing_next = -Ydes[:, 1, 0]
+        y_init_swing_next = torch.stack((y_pos_swing_next, y_vel_swing_next), dim=1)
+
+
+        # 3. Combine the two legs into a single state tensor.
+        # The result is shape (batch, 2, 2), where dims are (batch, [pos, vel], [stance, swing])
+        x_init = torch.stack((x_init_stance_next, x_init_swing_next), dim=2)
+        y_init = torch.stack((y_init_stance_next, y_init_swing_next), dim=2)
+        
+        # -- END OF THE FINAL FIX --
+        
+        return x_init, y_init
+    def _compute_desire_com_trajectory(self, cur_time, Xdesire):
+        """
+        Computes the desired com trajectory at the current time.
+
+        Args:
+            cur_time: The current time in the swing phase.
+            Xdesire: The desired state [x, x_dot] as a tensor of shape (batch, 2).
+        """
+        # -- START OF FIX --
+        # Xdesire is a 2D tensor of shape (batch, 2).
+        # We index it accordingly to get the position (column 0) and velocity (column 1).
+        x0 = Xdesire[:, 0]
+        v0 = Xdesire[:, 1]
+        # -- END OF FIX --
+        
+        c = torch.cosh(self.lambda_ * cur_time)
+        s = torch.sinh(self.lambda_ * cur_time)
+
+        # desired com position and velocity
+        xd = x0 * c + v0 * s / self.lambda_
+        vd = x0 * self.lambda_ * s + v0 * c
+
+        return xd, vd
 
     def _solve_deadbeat_gain(self, A: Tensor, B: Tensor) -> Tensor:
         """Solve for deadbeat gains."""
@@ -251,55 +318,61 @@ class HLIP(torch.nn.Module):
         B_tmp = torch.tensor([A[0, 0] + A[1, 1], A[0, 1] * A[1, 0] - A[0, 0] * A[1, 1]])
         return torch.linalg.solve(A_tmp, B_tmp)
 
-    def compute_desired_orbit(
-        self,
-        vel: Tensor,
-        T: float,
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        """Compute desired orbit parameters."""
-        # Get device from input tensor
-        device = vel.device
-        
-        # Compute matrices if not already done
-        if self.A_s2s is None:
-            self._compute_s2s_matrices()
-            
-        # Ensure matrices are on the same device as input
-        if self.A_s2s.device != device:
-            self.A_s2s = self.A_s2s.to(device)
-            self.B_s2s = self.B_s2s.to(device)
+    def compute_desired_orbit(self, cmd: torch.Tensor, T: torch.Tensor):
+        """
+        Computes the desired final state of the LIP model based on the given command.
 
-        # P1 orbit - handle batch dimension
-        U_des_p1 = vel[:, 0] * T  # [batch]
-      
-        # Expand matrices for batch operations
-        eye_expanded = torch.eye(2, device=device).unsqueeze(0).expand(vel.shape[0], -1, -1)  # [batch, 2, 2]
-        
-        # Solve for each batch element
-        X_des_p1 = torch.linalg.solve(eye_expanded- self.A_s2s, self.B_s2s * U_des_p1.unsqueeze(-1))  # [batch, 2, 1]
-        X_des_p1 = X_des_p1.squeeze(-1)  # [batch, 2]
+        Args:
+            cmd: Tensor of shape (batch, 2) containing the desired velocity command [vx, vy].
+            T: Tensor of shape (batch,) containing the step duration.
 
-        # P2 orbit for left and right
-        U_left = vel[:, 1] * T - self.y_nom  # [batch]
-        U_right = vel[:, 1] * T + self.y_nom  # [batch]
-        
-        # Create batch-wise matrices for Y calculations
-        A_squared = self.A_s2s @ self.A_s2s  # [batch, 2, 2]
-        B_term = self.A_s2s @ self.B_s2s  # [batch, 2]
-        
-        # Solve for Y_left and Y_right with batch dimension
-        Y_left = torch.linalg.solve(
-            eye_expanded - A_squared,
-            B_term * U_left.unsqueeze(-1) + self.B_s2s * U_right.unsqueeze(-1)
-        ).squeeze(-1)  # [batch, 2]
-        
-        Y_right = torch.linalg.solve(
-            eye_expanded - A_squared,
-            B_term * U_right.unsqueeze(-1) + self.B_s2s * U_left.unsqueeze(-1)
-        ).squeeze(-1)  # [batch, 2]
+        Returns:
+            A tuple of tensors for the desired final states and foot placements.
+        """
+        V_des = cmd
+        c = torch.cosh(self.lambda_ * T)
+        s = torch.sinh(self.lambda_ * T)
 
-        return X_des_p1, U_des_p1, torch.stack([Y_left, Y_right], dim=1), torch.stack([U_left, U_right], dim=1)
+        U_des_p1 = (V_des[:, 0] / self.lambda_) * s / (c - 1)
+        # Apply a small offset to the sign calculation to prevent zero-crossings from being exactly zero
+        sign_vy = torch.sign(V_des[:, 1] + 1e-6)
+        U_des_p2 = (V_des[:, 1] / self.lambda_) * s / (c - 1) - self.y_nom * sign_vy
 
+        eye_expanded = torch.eye(2, device=self.device).expand(self.num_envs, -1, -1)
+        
+        # --- START OF FIX ---
+        # Solve for the X-axis dynamics and name the result 'Xdes'
+        Bu_x = self.B_s2s * U_des_p1.view(-1, 1, 1)
+        Xdes = torch.linalg.solve(eye_expanded - self.A_s2s, Bu_x)
+
+        # Solve for the Y-axis dynamics and name the result 'Ydes'
+        Bu_y = self.B_s2s * U_des_p2.view(-1, 1, 1)
+        Ydes = torch.linalg.solve(eye_expanded - self.A_s2s, Bu_y)
+        
+        # Combine them for the subsequent calculations that use the mixed states
+        Combined_des = torch.cat([Xdes, Ydes], dim=-1)
+        # --- END OF FIX ---
+
+        c_Tds = torch.cosh(self.lambda_ * self.T_ds)
+        s_Tds = torch.sinh(self.lambda_ * self.T_ds)
+        c_Tss = torch.cosh(self.lambda_ * (T - self.T_ds))
+        s_Tss = torch.sinh(self.lambda_ * (T - self.T_ds))
+
+        # Note: The indexing on Combined_des is correct.
+        # [:,:,0] gets the X states, [:,:,1] gets the Y states.
+        Ux = (
+            V_des[:, 0] * (c_Tds * c_Tss + s_Tds * s_Tss)
+            - Combined_des[:, 0, 0] * c_Tss
+            - Combined_des[:, 1, 0] * s_Tss / self.lambda_
+        )
+        Uy = (
+            V_des[:, 1] * (c_Tds * c_Tss + s_Tds * s_Tss)
+            - Combined_des[:, 0, 1] * c_Tss
+            - Combined_des[:, 1, 1] * s_Tss / self.lambda_
+        )
+
+        # This will now work because Xdes, Ux, Ydes, and Uy all exist.
+        return Xdes, Ux, Ydes, Uy
     def compute_orbit(
         self, T: float, cmd: Tensor
     ) ->  None:

@@ -81,5 +81,5 @@ class G1FlatLipEnvCfg_PLAY(G1FlatLipEnvCfg):
         # remove random pushing
         self.events.base_external_force_torque = None
         # self.events.push_robot = None
-        self.events.push_robot.interval_range_s = (5.0,5.0)
+        self.events.push_robot.interval_range_s = (5.0,5.0) # push robot after 5 seconds
         self.events.reset_base.params["pose_range"] = {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (0,0)} #(-3.14, 3.14)},

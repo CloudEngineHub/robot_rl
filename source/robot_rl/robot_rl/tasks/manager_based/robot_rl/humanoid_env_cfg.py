@@ -36,7 +36,7 @@ class HumanoidCommandsCfg(CommandsCfg):
 
     # Command for the set period
     step_period = mdp.commands.GaitPeriodCfg(period_range=(0.8, 0.8), resampling_time_range=(10.0, 10.0))
-
+    
 
 @configclass
 class HumanoidObservationsCfg(ObservationsCfg):
