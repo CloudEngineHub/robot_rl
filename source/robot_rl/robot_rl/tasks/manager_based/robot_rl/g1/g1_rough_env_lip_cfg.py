@@ -62,7 +62,6 @@ class G1RoughLipRewards(HumanoidRewardCfg):
         }
     )
 
-
     clf_reward = RewTerm(
         func=mdp.clf_reward,
         weight=10.0,
@@ -93,11 +92,10 @@ class G1RoughLipEnvCfg(HumanoidEnvCfg):
     observations: G1RoughLipObservationsCfg = G1RoughLipObservationsCfg()
     commands: G1RoughLipCommandsCfg = G1RoughLipCommandsCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
+    
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
-
-
         
         ##
         # Scene
@@ -107,7 +105,6 @@ class G1RoughLipEnvCfg(HumanoidEnvCfg):
 
         # No height scanner for now
         self.scene.height_scanner = None
-
 
         ##
         # Randomization
@@ -141,9 +138,9 @@ class G1RoughLipEnvCfg(HumanoidEnvCfg):
         ##
         # Commands
         ##
-        self.commands.base_velocity.ranges.lin_vel_x = (-1.0,1.0)
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.4,0.4)
-        self.commands.base_velocity.ranges.ang_vel_z = (-0.3,0.3)
+        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
+        self.commands.base_velocity.ranges.lin_vel_y = (-0.4, 0.4)
+        self.commands.base_velocity.ranges.ang_vel_z = (-0.3, 0.3)
 
         ##
         # Terminations
