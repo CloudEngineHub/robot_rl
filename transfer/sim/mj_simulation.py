@@ -17,7 +17,7 @@ def get_model_data(robot: str, scene: str):
         raise ValueError("Invalid robot name! Only support g1_21j for now.")
 
     file_name = robot + "_" + scene + ".xml"
-    relative_path = "robots/g1/" + file_name
+    relative_path = "transfer/sim/robots/g1/" + file_name
     path = os.path.join(os.getcwd(), relative_path)
     print(f"Trying to load the xml at {path}")
     mj_model = mujoco.MjModel.from_xml_path(path)
