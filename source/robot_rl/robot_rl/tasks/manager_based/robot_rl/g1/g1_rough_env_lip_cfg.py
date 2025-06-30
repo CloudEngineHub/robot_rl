@@ -215,7 +215,8 @@ class G1RoughLipEnvCfg_PLAY(G1RoughLipEnvCfg):
         # remove random pushing
         self.events.base_external_force_torque = None
         # self.events.push_robot = None
-        self.events.push_robot.interval_range_s = (5.0,5.0)
+        self.events.push_robot.interval_range_s = (3.5, 3.5)
+        self.events.push_robot.params["velocity_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0)}
         self.events.reset_base.params["pose_range"] = {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (0,0)} #(-3.14, 3.14)},
         self.scene.terrain.terrain_generator.num_rows = 1
         self.scene.terrain.terrain_generator.num_cols = 2
