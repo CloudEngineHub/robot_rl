@@ -1052,7 +1052,7 @@ def alternative_linear_cycle(
     # body_pos_w rows: [-2]=right, [-1]=left toe
     rel_l   = pos[:, B-2, 0] - root_x
     rel_r   = pos[:, B-1, 0] - root_x
-
+    # print("right:",rel_r,";left:",rel_l)
     cmd_x    = env.command_manager.get_command(command_name)[:,0]
     dir_sign = torch.sign(cmd_x)
     moving   = (cmd_x.abs() > min_cmd_speed).float()
@@ -1179,6 +1179,108 @@ def alternate_feet_cycle(
     prev_cr.copy_(cr)
 
     return penalty
+
+
+from typing import Optional
+
+def contact_step_com_reward(
+    env: ManagerBasedRLEnv,
+    command_name: str            = "base_velocity",
+    left_sensor_name: str        = "contact_forces_left",
+    right_sensor_name: str       = "contact_forces_right",
+    force_thresh: float          = 1.0,
+    max_reward_dist: float       = 0.30,   # clamp in metres  (±)
+    min_cmd_speed: float         = 0.05,   # ignore very small commands
+    debug: bool                  = False,
+) -> torch.Tensor:
+    """
+    *Rising-edge* reward:
+
+        r = clamp( (x_foot – x_COM) * sign(cmd_x) ,  –max , +max )
+
+    • Computed only at the instant a shin first makes ground contact.
+    • Uses Amber link order:   B-2 = **left**,  B-1 = **right** foot.
+    • Holds the most recent reward value until the next contact event.
+    """
+    N, dev = env.num_envs, env.device
+
+    # ------------------------------------------------------------------ #
+    # 1)  detect contact & rising edges
+    # ------------------------------------------------------------------ #
+    def contact_bool(sensor_name: str) -> torch.Tensor:
+        fh = env.scene.sensors[sensor_name].data.net_forces_w_history
+        return (
+            fh.norm(dim=-1).max(dim=1)[0].max(dim=1)[0] > force_thresh
+        )  # bool[N]
+
+    c_L = contact_bool(left_sensor_name)
+    c_R = contact_bool(right_sensor_name)
+
+    fn = contact_step_com_reward
+    if not hasattr(fn, "_prev_L"):
+        fn._prev_L      = torch.zeros(N, device=dev, dtype=torch.bool)
+        fn._prev_R      = torch.zeros(N, device=dev, dtype=torch.bool)
+        fn._reward_hold = torch.zeros(N, device=dev)                # initial 0
+
+    rise_L = c_L & ~fn._prev_L     # left just landed
+    rise_R = c_R & ~fn._prev_R     # right just landed
+
+    fn._prev_L.copy_(c_L)
+    fn._prev_R.copy_(c_R)
+
+    # ------------------------------------------------------------------ #
+    # 2)  positions & command sign
+    # ------------------------------------------------------------------ #
+    asset = env.scene["robot"]
+    pos_w = asset.data.body_pos_w                    # [N,B,3]
+    B     = pos_w.shape[1]
+    x_L   = pos_w[:, B-2, 0]                        # left foot x
+    x_R   = pos_w[:, B-1, 0]                        # right foot x
+    x_COM = pos_w[:, 3,   0]                        # COM x (body index 3)
+
+    cmd_x      = env.command_manager.get_command(command_name)[:, 0]   # [N]
+    dir_sign   = torch.sign(cmd_x)                                     # ±1,0
+    moving     = cmd_x.abs() > min_cmd_speed                           # bool[N]
+
+    # ------------------------------------------------------------------ #
+    # 3)  compute reward on contact events
+    # ------------------------------------------------------------------ #
+    # clamp helper
+    def _clamp(v):
+        return torch.clamp(v, min=-max_reward_dist, max=+max_reward_dist)
+
+    # left foot lands
+    if rise_L.any():
+        idx = rise_L.nonzero(as_tuple=False).flatten()
+        delta = (x_L[idx] - x_COM[idx]) * dir_sign[idx]
+        fn._reward_hold[idx] = _clamp(delta)
+
+    # right foot lands
+    if rise_R.any():
+        idx = rise_R.nonzero(as_tuple=False).flatten()
+        delta = (x_R[idx] - x_COM[idx]) * dir_sign[idx]
+        fn._reward_hold[idx] = _clamp(delta)
+
+    # zero reward when not moving to avoid noise
+    fn._reward_hold[~moving] = 0.0
+
+    # ------------------------------------------------------------------ #
+    # 4)  optional debug prints
+    # ------------------------------------------------------------------ #
+    if debug:
+        for i in rise_L.nonzero(as_tuple=False).flatten().tolist():
+            print(f"[{env.sim.current_time:6.3f}s]  Left contact env {i}: "
+                  f"x_L={x_L[i]:.3f}, x_COM={x_COM[i]:.3f}, "
+                  f"reward={fn._reward_hold[i]:+.3f}")
+        for i in rise_R.nonzero(as_tuple=False).flatten().tolist():
+            print(f"[{env.sim.current_time:6.3f}s]  Right contact env {i}: "
+                  f"x_R={x_R[i]:.3f}, x_COM={x_COM[i]:.3f}, "
+                  f"reward={fn._reward_hold[i]:+.3f}")
+
+    # ------------------------------------------------------------------ #
+    return fn._reward_hold
+
+
 
 def contact_no_vel_amber(
     env: ManagerBasedRLEnv,
@@ -1625,7 +1727,7 @@ def compute_step_location_local_amber(
 
     # now write into it
     env.current_des_step[env_ids, :] = p[env_ids, :]
-    print(p)
+    # print(p)
     return p
 
 

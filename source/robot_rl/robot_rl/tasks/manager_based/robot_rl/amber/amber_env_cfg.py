@@ -234,6 +234,19 @@ class AmberRewardCfg(RewardsCfg):
             "right_sensor_name": "contact_forces_right",
         },
     )
+    com_step_reward = RewTerm(
+        func   = mdp.contact_step_com_reward,
+        weight = 10.0,                 # tune to match the scale of your other terms
+        params = {
+            "command_name":     "base_velocity",
+            "left_sensor_name":  "contact_forces_left",
+            "right_sensor_name": "contact_forces_right",
+            "force_thresh":      1.0,      # contact detection threshold (N)
+            "max_reward_dist":   0.30,     # clamp distance in metres
+            "min_cmd_speed":     0.05,     # below this |cmd_x| treat as no-motion
+            "debug":             False,    # True to print each landing event
+        },
+    )
     # penalises contact acc to time exponentially
     paper_cycle_reward = RewTerm(
         func   = mdp.rcs_phase_reward_no_pos,

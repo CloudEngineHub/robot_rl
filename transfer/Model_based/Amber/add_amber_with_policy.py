@@ -18,7 +18,7 @@ parser.add_argument(
     help="Where to write joint‐position logs",
 )
 parser.add_argument(
-    "--desired_vel", type=float, nargs=3, default=[0.5, 0.0, 0.0],
+    "--desired_vel", type=float, nargs=3, default=[0.2, 0.0, 0.0],
     help="Desired base command [vx, vy, vyaw]"
 )
 parser.add_argument(
