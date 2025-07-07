@@ -158,9 +158,13 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         # self.rewards.phase_contact.weight = 0.25
 
        # big penalty on fall (pelvis contact)
-        self.rewards.termination_penalty.weight           = -100.0  
+        self.rewards.termination_penalty.weight           = -200.0  
         # reward forward x‐velocity tracking
-        self.rewards.track_lin_vel_xy.weight              =  10#80.0  
+        self.rewards.track_lin_vel_xy.weight              =  20#80.0  
+        # penalize asymmetric joints per cycle
+        self.rewards.joint_symmetry_reward.weight        =  2#
+        # self.rewards.joint_symmetry_reward.params["diff_threshold"] = 5
+        self.rewards.joint_symmetry_reward.params["debug"] = False
         # Reward phase based contacts: stance and wing
         self.rewards.phase_contact.weight                 =  0
         # Reward phase based contacts: stance and wing
@@ -170,9 +174,9 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         # reward maintaining torso upright within window, penalize beyond threshold
         self.rewards.torso_orientation.weight             =    0.2#2.0  
         # reward alternating foot contacts vs repeats
-        self.rewards.alternation_contact.weight           =   0
+        self.rewards.alternation_contact.weight           =   0.2
         # reward progressive foot placement per cycle
-        self.rewards.progressive_step.weight              =    0.1#15.0  
+        self.rewards.progressive_step.weight              =    .2#15.0  
         # per‐cycle foot‐contact correctness (+5 for exactly one each, else penalty)
         self.rewards.foot_cycle_sym.weight                =   0#4
         # penalize asymmetric foot airtime
@@ -180,9 +184,9 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         self.rewards.symmetric_foot_airtime.params["diff_threshold"] = 5
         self.rewards.symmetric_foot_airtime.params["reward_good"] = 8
         # penalize foot sliding (squared speed during contact)
-        self.rewards.feet_no_slip_condition.weight        =  -1#-10.0  
+        self.rewards.feet_no_slip_condition.weight        =  -1.5#-10.0  
         # cycle based reward
-        self.rewards.paper_cycle_reward.weight            = 2#5
+        self.rewards.paper_cycle_reward.weight            = 3#5
         self.rewards.paper_cycle_reward.params["debug"]   = False
         # Reward for contact step ahead of com
         self.rewards.com_step_reward.weight               = 0

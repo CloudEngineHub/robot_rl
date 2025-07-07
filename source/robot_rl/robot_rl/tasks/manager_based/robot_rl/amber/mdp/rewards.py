@@ -1320,6 +1320,110 @@ def contact_no_vel_amber(
     penalty = pen_l + pen_r                                 # [N]
     return penalty
 
+
+def joint_symmetry_cycle(
+    env: ManagerBasedRLEnv,
+    Ts: float            = 0.4,     # single-step duration  (cycle = 2 Ts)
+    asset_name: str      = "robot",
+    std: float           = 0.15,    # width for exp decay when within threshold
+    diff_threshold: float = 0.10,   # radians; beyond this we penalise
+    reward_good: float    = 1.0,    # reward if diff ≤ threshold
+    penalty_slope: float  = 2.0,    # multiplier for (diff − diff_threshold)
+    debug: bool           = False,
+) -> torch.Tensor:
+    """
+    Per 2 Ts cycle:
+        diff = Σ_j |μ_L^j(first-half) − μ_R^j(second-half)| +
+               Σ_j |μ_R^j(first-half) − μ_L^j(second-half)|     (j∈{q1,q2})
+
+        reward =
+            reward_good * exp(−diff / std)          if diff ≤ diff_threshold
+            − penalty_slope * (diff − diff_threshold)  otherwise
+
+    Reward is computed once per full cycle and held constant until the next.
+    """
+    N, dev = env.num_envs, env.device
+    t      = env.sim.current_time
+    asset  = env.scene[asset_name]
+
+    # --- joint indices ---------------------------------------------------- #
+    try:
+        names = asset.dof_names
+    except AttributeError:
+        names = list(asset.cfg.init_state.joint_pos.keys())
+
+    idx_q1L = names.index("q1_left")
+    idx_q2L = names.index("q2_left")
+    idx_q1R = names.index("q1_right")
+    idx_q2R = names.index("q2_right")
+
+    q = asset.data.joint_pos                                # [N,D]
+    qL = torch.stack((q[:, idx_q1L], q[:, idx_q2L]), dim=1) # [N,2]
+    qR = torch.stack((q[:, idx_q1R], q[:, idx_q2R]), dim=1) # [N,2]
+
+    # --- cycle / half-cycle indexing ------------------------------------- #
+    cycle_len = 2 * Ts
+    half_idx  = int((t % cycle_len) // Ts)        # 0 or 1
+    cycle_id  = int(math.floor(t / cycle_len))
+
+    # --- persistent buffers ---------------------------------------------- #
+    fn = joint_symmetry_cycle
+    if not hasattr(fn, "_init"):
+        fn._prev_half   = torch.full((N,), -1, device=dev, dtype=torch.long)
+        fn._sum_L_h0    = torch.zeros((N,2), device=dev)
+        fn._sum_R_h0    = torch.zeros((N,2), device=dev)
+        fn._cnt_h0      = torch.zeros((N,),  device=dev, dtype=torch.long)
+        fn._sum_L_h1    = torch.zeros((N,2), device=dev)
+        fn._sum_R_h1    = torch.zeros((N,2), device=dev)
+        fn._cnt_h1      = torch.zeros((N,),  device=dev, dtype=torch.long)
+        fn._reward_hold = torch.zeros((N,),  device=dev)
+        fn._init        = True
+
+    # accumulate
+    if half_idx == 0:
+        fn._sum_L_h0 += qL
+        fn._sum_R_h0 += qR
+        fn._cnt_h0   += 1
+    else:
+        fn._sum_L_h1 += qL
+        fn._sum_R_h1 += qR
+        fn._cnt_h1   += 1
+
+    # detect full-cycle boundary (half 1 → 0)
+    prev_half = fn._prev_half
+    new_cycle_mask = (prev_half == 1) & (half_idx == 0)
+
+    if new_cycle_mask.any():
+        idx = new_cycle_mask.nonzero(as_tuple=False).flatten()
+
+        μL0 = fn._sum_L_h0[idx] / fn._cnt_h0[idx].clamp(min=1).unsqueeze(-1)
+        μR0 = fn._sum_R_h0[idx] / fn._cnt_h0[idx].clamp(min=1).unsqueeze(-1)
+        μL1 = fn._sum_L_h1[idx] / fn._cnt_h1[idx].clamp(min=1).unsqueeze(-1)
+        μR1 = fn._sum_R_h1[idx] / fn._cnt_h1[idx].clamp(min=1).unsqueeze(-1)
+
+        diff = (μL0 - μR1).abs().sum(dim=1) + (μR0 - μL1).abs().sum(dim=1)
+
+        reward_cycle = torch.where(
+            diff <= diff_threshold,
+            reward_good * torch.exp(-diff / std),
+            - penalty_slope * (diff - diff_threshold)
+        )
+        fn._reward_hold[idx] = reward_cycle
+
+        # reset accumulators for new cycle
+        fn._sum_L_h0[idx].zero_(); fn._sum_R_h0[idx].zero_(); fn._cnt_h0[idx].zero_()
+        fn._sum_L_h1[idx].zero_(); fn._sum_R_h1[idx].zero_(); fn._cnt_h1[idx].zero_()
+
+        if debug:
+            for i, d, r in zip(idx.tolist(), diff.tolist(), reward_cycle.tolist()):
+                print(f"[cycle {cycle_id-1}] env {i}: diff={d:.3f}  reward={r:+.3f}")
+
+    # update half tracker
+    prev_half.fill_(half_idx)
+
+    return fn._reward_hold
+
+
 def continuous_contact_penalty(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),        # kept for API symmetry

@@ -131,6 +131,18 @@ class AmberRewardCfg(RewardsCfg):
                 "threshold_deg":2,
                 },  # <— how “wide” your kernel is
     )
+    joint_symmetry_reward = RewTerm(
+        func   = mdp.joint_symmetry_cycle,
+        weight = 5.0,                 # tune to blend with other rewards
+        params = {
+            "Ts":              PERIOD/2,   # seconds per step
+            "std":             0.15,  # width for exp decay
+            "diff_threshold":  0.2,  # radians tolerance before penalty
+            "reward_good":     2.0,
+            "penalty_slope":   2.5,   # strength of penalty beyond threshold
+            "debug":           False,
+        },
+    )
     # torso angle
     torso_orientation = RewTerm(
         func   = mdp.torso_rotation_term,

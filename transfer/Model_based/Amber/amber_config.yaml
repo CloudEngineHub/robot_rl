@@ -2,7 +2,7 @@
 robot_name: "amber"
 
 # Path to your trained policy checkpoint (.pt) file
-checkpoint_path: "/home/s-ritwik/src/robot_rl/logs/rsl_rl/amber/2025-07-02_22-52-21/exported/policy.pt"
+checkpoint_path: "/home/s-ritwik/src/robot_rl/logs/rsl_rl/amber/2025-07-06_21-50-34/exported/policy.pt"
 # checkpoint_path: "/home/s-ritwik/src/robot_rl/logs/rsl_rl/g1/2025-06-09_18-44-04/exported/policy.pt"   # After re-factor
 
 # Number of observations and actions used when training Amber
