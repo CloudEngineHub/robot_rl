@@ -1,15 +1,14 @@
-from typing import Tuple
+import csv
+import math
 import os
 import time
-import math
-import numpy as np
-import csv
-import yaml
+from datetime import datetime
+
 import mujoco
 import mujoco.viewer
-from datetime import datetime
+import numpy as np
 import pygame
-
+from typing import Tuple
 from transfer.sim.robot import Robot
 from transfer.sim.simulation import Simulation
 
@@ -27,6 +26,7 @@ def get_model_data(robot: str, scene: str):
 
     return mj_model, mj_data
 
+
 def get_projected_gravity(quat):
     qw = quat[0]
     qx = quat[1]
@@ -41,6 +41,7 @@ def get_projected_gravity(quat):
 
     return pg
 
+
 def log_row_to_csv(filename, data):
     """
     Appends a single row of data to an existing CSV file.
@@ -52,14 +53,15 @@ def log_row_to_csv(filename, data):
     try:
         # Open in append mode ('a') to add data to the end of the file
         # newline='' is important to prevent extra blank rows
-        with open(filename, 'a', newline='') as csvfile:
+        with open(filename, "a", newline="") as csvfile:
             csv_writer = csv.writer(csvfile)
             csv_writer.writerow(data)
         # print(f"Appended row to {filename}") # Uncomment for verbose logging
     except Exception as e:
         print(f"Error appending row to {filename}: {e}")
 
-def run_simulation(policy, robot: str, scene: str, log: bool, log_dir: str, use_height_sensor: bool = False):
+def run_simulation(policy, robot: str, scene: str, log: bool, log_dir: str, use_height_sensor: bool = False,
+                   tracking_body_name: str =""):
     """Run the simulation.
     
     Args:
@@ -74,7 +76,7 @@ def run_simulation(policy, robot: str, scene: str, log: bool, log_dir: str, use_
     robot_instance = Robot(robot, scene)
     
     # Create and run simulation
-    sim = Simulation(policy, robot_instance, log, log_dir, use_height_sensor=use_height_sensor)
+    sim = Simulation(policy, robot_instance, log, log_dir, use_height_sensor=use_height_sensor, tracking_body_name=tracking_body_name)
     sim.run()
 
 def ray_cast_sensor(model, data, site_name, size: Tuple[float, float], x_y_num_rays: Tuple[int, int], sen_offset: float = 0) -> np.array:
@@ -85,13 +87,13 @@ def ray_cast_sensor(model, data, site_name, size: Tuple[float, float], x_y_num_r
 
     # Get the site location
     site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, site_name)
-    site_pos = data.site_xpos[site_id]
+    site_pos = data.site_xpos[site_id].copy()
 
     # Add to the global z
     site_pos[2] = site_pos[2] + 10
 
-    site_pos[0] = site_pos[0] - size[0] / 2.
-    site_pos[1] = site_pos[1] - size[1] / 2.
+    site_pos[0] = site_pos[0] - size[0] / 2.0
+    site_pos[1] = site_pos[1] - size[1] / 2.0
 
     # Ray information
     direction = np.zeros(3)

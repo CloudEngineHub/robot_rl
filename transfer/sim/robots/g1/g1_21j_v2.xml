@@ -97,7 +97,7 @@ Position and velocity actuators added. -->
 
     <!-- Foot Contact Parameters -->
     <default class="collision">
-        <!-- TODO: Consider modifying the friction paramters -->
+        <!-- TODO: Consider modifying the friction parameters -->
         <geom size="0.005" priority="1" condim="6" solref="0.01 1.1"/>
     </default>
 </default>
@@ -673,7 +673,7 @@ Position and velocity actuators added. -->
   <keyframe>
     <key name="standing" 
       qpos="0 0 0.75
-            0 0 0 0
+            1 0 0 0
             -0.42 0 0 0.81 -0.4 0
             -0.42 0 0 0.81 -0.4 0
             0
@@ -698,13 +698,13 @@ Position and velocity actuators added. -->
             0
             0 0.27 0 0.5 0 0 0
             0 -0.27 0 0.5 0 0 0
-            
+
             0 0 0 0 0 0
             0 0 0 0 0 0
             0
             0 0 0 0 0 0 0
             0 0 0 0 0 0 0
-            
+
             0 0 0 0 0 0
             0 0 0 0 0 0
             0

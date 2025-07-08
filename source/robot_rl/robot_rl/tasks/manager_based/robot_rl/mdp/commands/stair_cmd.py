@@ -2,7 +2,7 @@ import torch,math
 from isaaclab.utils.math import euler_xyz_from_quat, wrap_to_pi, quat_from_euler_xyz,quat_rotate_inverse, yaw_quat, quat_rotate, quat_inv, quat_apply
 from .hlip_cmd import HLIPCommandTerm, euler_rates_to_omega, _transfer_to_global_frame, _transfer_to_local_frame
 from .ref_gen import bezier_deg, calculate_cur_swing_foot_pos_stair, calculate_cur_swing_foot_pos
-from .clf import CLF
+from .clf_cmd.clf import CLF
 from .hlip_batch import HLIPBatch
 from typing import TYPE_CHECKING
 
@@ -487,9 +487,6 @@ class StairCmd(HLIPCommandTerm):
         self.stance_foot_ori = self.get_euler_from_quat(foot_ori_w[batch_idx, self.stance_idx, :])
 
         # Convert foot positions to the robot's yaw-aligned local frame
-        # stance_pos_local = _transfer_to_local_frame(
-        #     foot_pos_w[:, self.stance_idx, :], root_quat
-        # )
         swing2stance_local = _transfer_to_local_frame(
             foot_pos_w[batch_idx, self.swing_idx, :]-self.stance_foot_pos_0, self.stance_foot_ori_quat_0
         )

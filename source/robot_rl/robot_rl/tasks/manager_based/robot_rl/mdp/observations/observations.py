@@ -43,14 +43,25 @@ def foot_ang_vel(env: ManagerBasedRLEnv, command_name:str = "hlip_ref") -> torch
 
 def ref_traj(env: ManagerBasedRLEnv, command_name:str = "hlip_ref") -> torch.Tensor:
     cmd = env.command_manager.get_term(command_name)
-    ref_traj = cmd.y_out
+    ref_traj = cmd.y_out.clone()
+    ref_traj[:,8] *= 50.0
     return ref_traj
 
 def act_traj(env: ManagerBasedRLEnv, command_name:str = "hlip_ref") -> torch.Tensor:
     cmd = env.command_manager.get_term(command_name)
-    act_traj = cmd.y_act
+    act_traj = cmd.y_act.clone()
+    act_traj[:,8] *= 50.0
     return act_traj
 
+def foot_ref_traj(env: ManagerBasedRLEnv, command_name:str = "hlip_ref") -> torch.Tensor:
+    cmd = env.command_manager.get_term(command_name)
+    ref_traj = cmd.y_out[:,8]
+    return ref_traj.unsqueeze(-1)
+
+def foot_act_traj(env: ManagerBasedRLEnv, command_name:str = "hlip_ref") -> torch.Tensor:
+    cmd = env.command_manager.get_term(command_name)
+    act_traj = cmd.y_act[:,8]
+    return act_traj.unsqueeze(-1)
 
 def ref_traj_vel(env: ManagerBasedRLEnv, command_name:str = "hlip_ref") -> torch.Tensor:
     cmd = env.command_manager.get_term(command_name)
@@ -78,7 +89,7 @@ def v(env: ManagerBasedRLEnv, command_name:str) -> torch.Tensor:
     return v
         
 
-def stair_sin_phase(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
+def ref_sin_phase(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
     cmd = env.command_manager.get_term(command_name)
     phase = 2*torch.pi * cmd.tp
     sphase = torch.sin(phase)
@@ -88,7 +99,7 @@ def stair_sin_phase(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
 
     return sphase
 
-def stair_cos_phase(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
+def ref_cos_phase(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
     cmd = env.command_manager.get_term(command_name)
     phase = 2*torch.pi * cmd.tp
     cphase = torch.cos(phase)

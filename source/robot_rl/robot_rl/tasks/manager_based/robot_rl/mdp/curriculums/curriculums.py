@@ -23,32 +23,44 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
+# def gaits_curriculum(
+#     env: ManagerBasedRLEnv, env_ids: Sequence[int], update_interval: int = 5000,
+#     vel_range: tuple[float, float] = (0.1, 0.5)
+# ) -> float:
+#     """Curriculum based on clf value"""
+#     cmd_term_cfg = env.command_manager.get_term_cfg("base_velocity")
+#     ref_cmd_term = env.command_manager.get_term("hzd_ref")
+#     sw_z_err = ref_cmd_term.metrics["left_foot_middle_ee_pos_z"]
+#     import pdb; pdb.set_trace()
+#     #increase the vel range if 
+
+#     new_vel_range = vel_range
+#     if env.common_step_counter % update_interval == 0:
+#         cmd_term_cfg.ranges.lin_vel_x = new_vel_range
+#         env.command_manager.set_term_cfg("base_velocity", cmd_term_cfg)
+#     return cmd_term_cfg.ranges.lin_vel_x
+
 
 def clf_curriculum(
-    env: ManagerBasedRLEnv, env_ids: Sequence[int], update_interval: int = 100
+    env: ManagerBasedRLEnv, env_ids: Sequence[int], update_interval: int = 100,min_val: float = 20.0, min_clf_val: float = 10.0
 ) -> float:
     """Curriculum based on clf value"""
     term_cfg = env.reward_manager.get_term_cfg("clf_decreasing_condition")
     new_clf = term_cfg.params["max_clf_decreasing"]
+    clf_cfg = env.reward_manager.get_term_cfg("clf_reward")
+    new_max_clf = clf_cfg.params["max_clf"]
+
     if env.common_step_counter  >= update_interval and env.common_step_counter % update_interval == 0:
         
-            # buf = env.observation_manager._group_obs_term_history_buffer["critic"]["v"].buffer
-
-            # 2) Compute one global average (over envs *and* time), then clamp
-            #    Results in a 0-d tensor; .item() → Python float
-            # scale = env.observation_manager.cfg.critic.v.scale
-            # global_avg = buf.mean() * 1.0/scale
-            # buf = env.command_manager.get_term("hlip_ref").v_buffer
-            # global_avg = buf.mean()
-            # global_avg = torch.clamp(global_avg, min=1.0, max=100.0)
-            # term_cfg = env.reward_manager.get_term_cfg("clf_reward")
-            # term_cfg.params["max_clf"] = global_avg.detach().cpu().item()
-            # env.reward_manager.set_term_cfg("clf_reward", term_cfg)
+            
 
             # increase clf decreasing condition weight?
-            new_clf = max(new_clf -2,20.0)
+            new_clf = max(new_clf -2,min_val)
+            new_max_clf = max(new_max_clf -1,min_clf_val)
             term_cfg.params["max_clf_decreasing"] = new_clf
             env.reward_manager.set_term_cfg("clf_decreasing_condition", term_cfg)
+            clf_cfg.params["max_clf"] = new_max_clf
+            env.reward_manager.set_term_cfg("clf_reward", clf_cfg)
     return new_clf
 
 def terrain_levels(
@@ -83,7 +95,7 @@ def terrain_levels(
     # compute the distance the robot walked
     distance = torch.norm(asset.data.root_pos_w[env_ids, :2] - env.scene.env_origins[env_ids, :2], dim=1)
     # robots that walked far enough progress to harder terrains
-    move_up = distance > terrain.cfg.terrain_generator.size[0] / 2
+    move_up = distance > torch.norm(command[env_ids, :2], dim=1) * env.max_episode_length_s * 0.6
     # robots that walked less than half of their required distance go to simpler terrains
     move_down = distance < torch.norm(command[env_ids, :2], dim=1) * env.max_episode_length_s * 0.5
     move_down *= ~move_up

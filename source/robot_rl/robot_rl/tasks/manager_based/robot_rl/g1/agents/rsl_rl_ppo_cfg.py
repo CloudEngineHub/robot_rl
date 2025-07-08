@@ -5,8 +5,12 @@
 from dataclasses import MISSING
 from typing import Literal
 from isaaclab.utils import configclass
+from isaaclab_rl.rsl_rl import (
+    RslRlOnPolicyRunnerCfg,
+    RslRlPpoActorCriticCfg,
+    RslRlPpoAlgorithmCfg,
+)
 
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
 
 @configclass
 class CustomPPOActorCriticCfg:
@@ -61,7 +65,10 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
+    resume = False
     resume_path = None
+    # resume = True
+    # resume_path = "/home/amy/gitrepo/robot_rl/logs/g1_policies/flat-hzd/g1/2025-07-02_12-04-33/model_8000.pt"
 
 
 @configclass
@@ -84,6 +91,9 @@ class StairPPOCfg(PPORunnerCfg):
 
 @configclass
 class StairCNNPPOCfg(PPORunnerCfg):
+    # resume = True
+    # resume_path = "/home/kli5/robot_rl/logs/g1_policies/stair-hzd/g1/model_7400.pt"
+    # resume_path = "/home/kli5/robot_rl/logs/g1_policies/stair-hzd/g1/2025-07-01_09-13-31/model_7800.pt"
     resume = False
     resume_path = None
     policy = None
@@ -95,3 +105,11 @@ class StairCNNPPOCfg(PPORunnerCfg):
         activation="elu",
         height_map_shape=(1, 25,25),
     )
+
+@configclass
+class GaitLibraryPPOCfg(PPORunnerCfg):
+    # resume = True
+    # resume_path = "/home/kli5/robot_rl/logs/g1_policies/flat-hzd-GL/g1/2025-07-05_07-55-09/model_5200.pt"
+    resume = False
+    resume_path = None
+    

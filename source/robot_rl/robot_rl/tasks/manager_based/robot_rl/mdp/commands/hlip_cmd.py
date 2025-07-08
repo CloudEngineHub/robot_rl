@@ -8,8 +8,8 @@ from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 import isaaclab.sim as sim_utils
 from isaaclab.utils.math import euler_xyz_from_quat, wrap_to_pi, quat_from_euler_xyz,quat_rotate_inverse, yaw_quat, quat_rotate, quat_inv, quat_apply
 
-from .ref_gen import bezier_deg, calculate_cur_swing_foot_pos, HLIP
-from .clf import CLF
+from robot_rl.tasks.manager_based.robot_rl.mdp.commands.ref_gen import bezier_deg, calculate_cur_swing_foot_pos, HLIP
+from robot_rl.tasks.manager_based.robot_rl.mdp.commands.clf_cmd.clf import CLF
 # from isaaclab.utils.transforms import combine_frame_transforms, quat_from_euler_xyz
 
 from typing import TYPE_CHECKING
@@ -52,9 +52,16 @@ def euler_rates_to_omega(eul: torch.Tensor,
     omega = torch.einsum('...ij,...j->...i', M, eul_rates)
     return omega
 
+def get_euler_from_quat(quat):
 
+    euler_x, euler_y, euler_z = euler_xyz_from_quat(quat)
+    euler_x = wrap_to_pi(euler_x)
+    euler_y = wrap_to_pi(euler_y)
+    euler_z = wrap_to_pi(euler_z)
+    return torch.stack([euler_x, euler_y, euler_z], dim=-1)
 
 def _transfer_to_global_frame(vec, root_quat):
+    return quat_apply(yaw_quat(root_quat), vec)
     return quat_apply(yaw_quat(root_quat), vec)
 
 def _transfer_to_local_frame(vec, root_quat):
@@ -449,13 +456,7 @@ class HLIPCommandTerm(CommandTerm):
 
 
 
-    def get_euler_from_quat(self, quat):
 
-        euler_x, euler_y, euler_z = euler_xyz_from_quat(quat)
-        euler_x = wrap_to_pi(euler_x)
-        euler_y = wrap_to_pi(euler_y)
-        euler_z = wrap_to_pi(euler_z)
-        return torch.stack([euler_x, euler_y, euler_z], dim=-1)
 
     def get_actual_state(self):
         """Populate actual state and its time derivative in the robot's local (yaw-aligned) frame."""

@@ -1,7 +1,7 @@
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import ActuatorNetMLPCfg, DCMotorCfg, ImplicitActuatorCfg
+from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
-import numpy as np
+
 ROBOT_ASSETS = "robot_assets/g1"
 # TODO: Fix warnings about waist_roll_link and yaw_link inertia and mass
 G1_CFG = ArticulationCfg(
@@ -21,14 +21,13 @@ G1_CFG = ArticulationCfg(
             enabled_self_collisions=False, solver_position_iteration_count=8, solver_velocity_iteration_count=4
         ),
         collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.01, rest_offset=0.0),
-
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.75),   # TODO: Consider setting this higher if I init issues
+        pos=(0.0, 0.0, 0.75),  # TODO: Consider setting this higher if I init issues
         joint_pos={
             ".*_hip_pitch_joint": -0.42,
-            ".*_hip_roll_joint": 0.,
-            ".*_hip_yaw_joint": 0.,
+            ".*_hip_roll_joint": 0.0,
+            ".*_hip_yaw_joint": 0.0,
             ".*_knee_joint": 0.81,
             ".*_ankle_pitch_joint": -0.4,
             ".*_ankle_roll_joint": 0.,
@@ -41,7 +40,6 @@ G1_CFG = ArticulationCfg(
             # ".*_wrist_roll_joint": 0.,
             # ".*_wrist_pitch_joint": 0.,
             # ".*_wrist_yaw_joint": 0.,
-
             # "left_one_joint": 1.0,
             # "right_one_joint": -1.0,
             # "left_two_joint": 0.52,
@@ -112,13 +110,13 @@ G1_CFG = ArticulationCfg(
             ],
             effort_limit_sim=300,
             velocity_limit_sim=100.0,
-            stiffness= {
+            stiffness={
                 ".*_shoulder_pitch_joint": 100.0,
                 ".*_shoulder_roll_joint": 100.0,
                 ".*_shoulder_yaw_joint": 50.0,
                 ".*_elbow_joint": 50.0,
             },
-            damping= {
+            damping={
                 ".*_shoulder_pitch_joint": 2.0,
                 ".*_shoulder_roll_joint": 2.0,
                 ".*_shoulder_yaw_joint": 2.0,
@@ -143,52 +141,4 @@ This configuration removes most collision meshes to speed up simulation.
 
 
 
-def build_relabel_matrix() -> np.ndarray:
-        """
-        Build a relabel (mirror symmetry) matrix R for the G1 humanoid model.
-        Applies left/right swaps and sign flips to roll/yaw joints.
 
-        Returns
-        -------
-        R : (nq, nq) numpy.ndarray
-            Orthogonal permutation matrix such that q_mirrored = R @ q
-        """
-
-        R = np.eye(21)
-        # ----------------------------
-        # LEG relabeling
-        # ----------------------------
-        # Joint ordering in legs (6 DOF each)
-        # [hip_pitch, hip_roll, hip_yaw, knee, ankle_pitch, ankle_roll]
-        left_leg = np.array([0, 1, 2, 3, 4, 5])
-        right_leg = np.array([6, 7, 8, 9, 10, 11])
-
-        tmp = R[left_leg, :].copy()
-        R[left_leg, :] = R[right_leg, :]
-        R[right_leg, :] = tmp
-
-        # Sign flips: hip_roll, hip_yaw, ankle_roll
-        # left and right roll/yaw
-        flip_leg = np.array([1, 2, 5, 7, 8, 11])
-        R[flip_leg, :] *= -1
-
-        # flip waist yaw
-        R[12, :] *= -1
-
-        # ----------------------------
-        # ARM relabeling
-        # ----------------------------
-        # Starts after 12 leg joints + waist_yaw (1)
-        arm_offset =  12 + 1
-        left_arm = arm_offset + np.array([0, 1, 2, 3])
-        right_arm = arm_offset + np.array([4, 5, 6, 7])
-
-        tmp = R[left_arm, :].copy()
-        R[left_arm, :] = R[right_arm, :]
-        R[right_arm, :] = tmp
-
-        # Sign flips: shoulder_roll, shoulder_yaw
-        flip_arm = arm_offset + np.array([1, 2, 5, 6])  # left/right roll/yaw
-        R[flip_arm, :] *= -1
-
-        return R

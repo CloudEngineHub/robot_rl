@@ -71,6 +71,10 @@ ENVIRONMENTS = {
     "flat-hzd": "G1-flat-hzd",
     "rough": "G1-rough-clf",
     "slight-rough": "G1-slight-rough-clf",
+    "flat-hzd-no-dr": "G1-flat-hzd-no-dr",
+    "stair-hzd": "G1-stair-hzd",
+    "flat-hzd-GL": "G1-flat-hzd-GL",
+    "stair-hzd-GL": "G1-stair-hzd-GL",
 }
 
 

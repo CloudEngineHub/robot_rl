@@ -1,7 +1,3 @@
-import math
-import torch
-
-from isaaclab.envs import ManagerBasedEnv, ManagerBasedEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
@@ -23,7 +19,7 @@ from robot_rl.tasks.manager_based.robot_rl.mdp.commands.cmd_cfg import HLIPComma
 # Pre-defined configs
 ##
 from robot_rl.assets.robots.g1_21j import G1_MINIMAL_CFG  # isort: skip
-from source.robot_rl.robot_rl.tasks.manager_based.robot_rl.g1.g1_observation import G1RoughLipObservationsCfg
+from robot_rl.tasks.manager_based.robot_rl.g1.g1_observation import G1RoughLipObservationsCfg
 #
 
 @configclass
@@ -38,16 +34,49 @@ class G1RoughLipCommandsCfg(HumanoidCommandsCfg):
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
-    clf_curriculum = CurrTerm(func=mdp.clf_curriculum, params={"update_interval": 1000})
+    clf_curriculum = CurrTerm(func=mdp.clf_curriculum, params={"update_interval": 1000, "min_val": 20.0})
 
 # Lip specific rewards
 ##
 class G1RoughLipRewards(HumanoidRewardCfg):
-    """Rewards specific to the LIP Model, with declared custom terms."""
-    holonomic_constraint: RewTerm = None
-    holonomic_constraint_vel: RewTerm = None
-    clf_reward: RewTerm = None
-    clf_decreasing_condition: RewTerm = None
+    """Rewards specific to LIP Model"""
+
+    holonomic_constraint = RewTerm(
+        func=mdp.holonomic_constraint,
+        weight=4.0,
+        params={
+            "command_name": "hlip_ref",
+            "z_offset": 0.036,
+        }
+    )
+
+    holonomic_constraint_vel = RewTerm(
+        func=mdp.holonomic_constraint_vel,
+        weight=2.0,
+        params={
+            "command_name": "hlip_ref",
+        }
+    )
+
+
+    clf_reward = RewTerm(
+        func=mdp.clf_reward,
+        weight=10.0,
+        params={
+            "command_name": "hlip_ref",
+            "max_clf": 100.0,
+        }
+    )
+
+    clf_decreasing_condition = RewTerm(
+        func=mdp.clf_decreasing_condition,
+        weight=-2.0,
+        params={
+            "command_name": "hlip_ref",
+            "alpha": 1.0,
+            "max_clf_decreasing": 200.0,
+        }
+    )
 
 
 
@@ -55,6 +84,7 @@ class G1RoughLipRewards(HumanoidRewardCfg):
 @configclass
 class G1RoughLipEnvCfg(HumanoidEnvCfg):
     """Configuration for the G1 Flat environment."""
+
     rewards: G1RoughLipRewards = G1RoughLipRewards()
     # events: G1RoughLipEventsCfg = G1RoughLipEventsCfg()
     observations: G1RoughLipObservationsCfg = G1RoughLipObservationsCfg()
@@ -100,8 +130,13 @@ class G1RoughLipEnvCfg(HumanoidEnvCfg):
         # Randomization
         ##
         # self.events.push_robot = None
-        self.events.push_robot.params["velocity_range"] = {"x": (-1, 1), "y": (-1, 1), "roll": (-0.4, 0.4),
-                                                           "pitch": (-0.4, 0.4), "yaw": (-0.4, 0.4)}
+        self.events.push_robot.params["velocity_range"] = {
+            "x": (-1, 1),
+            "y": (-1, 1),
+            "roll": (-0.4, 0.4),
+            "pitch": (-0.4, 0.4),
+            "yaw": (-0.4, 0.4),
+        }
         # self.events.push_robot.params["velocity_range"] = {"x": (-0, 0), "y": (-0, 0), "roll": (-0.0, 0.0),
         #                                                    "pitch": (-0., 0.), "yaw": (-0.0, 0.0)}
         self.events.add_base_mass.params["asset_cfg"].body_names = ["pelvis_link"]

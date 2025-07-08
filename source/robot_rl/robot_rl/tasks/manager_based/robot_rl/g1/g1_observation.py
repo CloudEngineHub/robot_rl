@@ -26,6 +26,10 @@ class G1RoughLipObservationsCfg():
         sin_phase = ObsTerm(func=mdp.sin_phase, params={"command_name": "step_period"})
         cos_phase = ObsTerm(func=mdp.cos_phase, params={"command_name": "step_period"})
 
+        def __post_init__(self):
+            self.enable_corruption = True
+            self.concatenate_terms = True
+
     @configclass
     class CriticCfg(ObsGroup):
         """Observations for critic group."""
@@ -45,10 +49,14 @@ class G1RoughLipObservationsCfg():
 
         foot_vel = ObsTerm(func=mdp.foot_vel, params={"command_name": "hlip_ref"},scale=1.0)
         foot_ang_vel = ObsTerm(func=mdp.foot_ang_vel, params={"command_name": "hlip_ref"},scale=1.0)
-        ref_traj = ObsTerm(func=mdp.ref_traj, params={"command_name": "hlip_ref"},scale=1.0)
-        act_traj = ObsTerm(func=mdp.act_traj, params={"command_name": "hlip_ref"},scale=1.0)
-        ref_traj_vel = ObsTerm(func=mdp.ref_traj_vel, params={"command_name": "hlip_ref"},clip=(-20.0,20.0,),scale=1)
-        act_traj_vel = ObsTerm(func=mdp.act_traj_vel, params={"command_name": "hlip_ref"},clip=(-20.0,20.0,),scale=1)
+        ref_traj = ObsTerm(
+            func=mdp.ref_traj,
+            params={"command_name": "hlip_ref"},
+            scale=tuple([5.0] * 12 + [0.1] * 9)
+        )
+        act_traj = ObsTerm(func=mdp.act_traj, params={"command_name": "hlip_ref"},scale=tuple([5.0] * 12 + [0.1] * 9))
+        ref_traj_vel = ObsTerm(func=mdp.ref_traj_vel, params={"command_name": "hlip_ref"},clip=(-20.0,20.0,),scale=tuple([1.0] * 12 + [0.1] * 9))
+        act_traj_vel = ObsTerm(func=mdp.act_traj_vel, params={"command_name": "hlip_ref"},clip=(-20.0,20.0,),scale=tuple([1.0] * 12 + [0.1] * 9))
         height_scan = None      # Removed - not supported yet
         contact_state = ObsTerm(
             func=mdp.contact_state,
@@ -62,6 +70,14 @@ class G1RoughLipObservationsCfg():
     # observation groups
     policy: PolicyCfg = PolicyCfg()
     critic: CriticCfg = CriticCfg()
+
+
+@configclass
+class G1FlatHZDObservationsCfg(G1RoughLipObservationsCfg):
+    class PolicyCfg(G1RoughLipObservationsCfg.PolicyCfg):
+        ref_traj = ObsTerm(func=mdp.foot_ref_traj, params={"command_name": "hzd_ref"},scale=20.0)
+        act_traj = ObsTerm(func=mdp.foot_act_traj, params={"command_name": "hzd_ref"},scale=20.0)
+    policy: PolicyCfg = PolicyCfg()
 
 
 
@@ -90,20 +106,18 @@ class G1StairObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         actions = ObsTerm(func=mdp.last_action)
         # Phase clock
-        sin_phase = ObsTerm(
-            func=mdp.stair_sin_phase,
-            params={"command_name": "hlip_ref"},
-        )
-        cos_phase = ObsTerm(
-            func=mdp.stair_cos_phase,
-            params={"command_name": "hlip_ref"},
-        )
+        sin_phase = ObsTerm(func=mdp.ref_sin_phase, params={"command_name": "hlip_ref"})
+        cos_phase = ObsTerm(func=mdp.ref_cos_phase, params={"command_name": "hlip_ref"})
+
         step_duration = ObsTerm(
             func=mdp.step_duration,
             params={"command_name": "hlip_ref"},
         )
-        # des_foot_pos = ObsTerm(func=mdp.generated_commands, params={"command_name": "hlip_ref"},history_length=1,scale=(1.0,1.0))
 
+        def __post_init__(self):
+            self.enable_corruption = True
+            self.concatenate_terms = True
+  
     @configclass
     class CriticCfg(ObsGroup):
         """Observations for critic group."""
@@ -124,14 +138,9 @@ class G1StairObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         actions = ObsTerm(func=mdp.last_action)
         # Phase clock
-        sin_phase = ObsTerm(
-            func=mdp.stair_sin_phase,
-            params={"command_name": "hlip_ref"},
-        )
-        cos_phase = ObsTerm(
-            func=mdp.stair_cos_phase,
-            params={"command_name": "hlip_ref"},
-        )
+        sin_phase = ObsTerm(func=mdp.ref_sin_phase, params={"command_name": "hlip_ref"})
+        cos_phase = ObsTerm(func=mdp.ref_cos_phase, params={"command_name": "hlip_ref"})
+
         step_duration = ObsTerm(
             func=mdp.step_duration,
             params={"command_name": "hlip_ref"},
@@ -143,12 +152,20 @@ class G1StairObservationsCfg:
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel,scale=1.0)
         foot_vel = ObsTerm(func=mdp.foot_vel, params={"command_name": "hlip_ref"},scale=1.0)
         foot_ang_vel = ObsTerm(func=mdp.foot_ang_vel, params={"command_name": "hlip_ref"},scale=1.0)
-        ref_traj = ObsTerm(func=mdp.ref_traj, params={"command_name": "hlip_ref"},scale=1.0)
-        act_traj = ObsTerm(func=mdp.act_traj, params={"command_name": "hlip_ref"},scale=1.0)
-        ref_traj_vel = ObsTerm(func=mdp.ref_traj_vel, params={"command_name": "hlip_ref"},clip=(-20.0,20.0,),scale=0.1)
-        act_traj_vel = ObsTerm(func=mdp.act_traj_vel, params={"command_name": "hlip_ref"},clip=(-20.0,20.0,),scale=0.1)
+        ref_traj = ObsTerm(func=mdp.ref_traj, params={"command_name": "hlip_ref"},scale=tuple([5.0] * 12 + [0.1] * 9))
+        act_traj = ObsTerm(func=mdp.act_traj, params={"command_name": "hlip_ref"},scale=tuple([5.0] * 12 + [0.1] * 9))
+        ref_traj_vel = ObsTerm(func=mdp.ref_traj_vel, params={"command_name": "hlip_ref"},clip=(-20.0,20.0,),scale=tuple([1.0] * 12 + [0.1] * 9))
+        act_traj_vel = ObsTerm(func=mdp.act_traj_vel, params={"command_name": "hlip_ref"},clip=(-20.0,20.0,),scale=tuple([1.0] * 12 + [0.1] * 9))
        
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
     critic: CriticCfg = CriticCfg()
+
+
+@configclass
+class G1StairHZDObservationsCfg(G1StairObservationsCfg):
+    class PolicyCfg(G1StairObservationsCfg.PolicyCfg):
+        ref_traj = ObsTerm(func=mdp.foot_ref_traj, params={"command_name": "hzd_ref"},scale=20.0)
+        act_traj = ObsTerm(func=mdp.foot_act_traj, params={"command_name": "hzd_ref"},scale=20.0)
+    policy: PolicyCfg = PolicyCfg()
