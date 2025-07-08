@@ -30,5 +30,6 @@ class AmberFlatEnvCfg(AmberRoughEnvCfg):
         self.scene.terrain.terrain_generator = None
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
+        self.observations.policy.base_angle_vel= None
         self.curriculum.terrain_levels = None
         # (any other flat‐specific tweaks)

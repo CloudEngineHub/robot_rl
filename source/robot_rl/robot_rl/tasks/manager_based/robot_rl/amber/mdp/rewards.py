@@ -24,6 +24,27 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
+def quat_apply_inverse(quat: torch.Tensor, vec: torch.Tensor) -> torch.Tensor:
+    """Apply an inverse quaternion rotation to a vector.
+
+    Args:
+        quat: The quaternion in (w, x, y, z). Shape is (..., 4).
+        vec: The vector in (x, y, z). Shape is (..., 3).
+
+    Returns:
+        The rotated vector in (x, y, z). Shape is (..., 3).
+    """
+    # store shape
+    shape = vec.shape
+    # reshape to (N, 3) for multiplication
+    quat = quat.reshape(-1, 4)
+    vec = vec.reshape(-1, 3)
+    # extract components from quaternions
+    xyz = quat[:, 1:]
+    t = xyz.cross(vec, dim=-1) * 2
+    return (vec - quat[:, 0:1] * t + xyz.cross(t, dim=-1)).view(shape)
+
+
 def joint_pos_target(
         env, asset_cfg: SceneEntityCfg, joint_des: torch.Tensor, std: float, joint_weight: torch.Tensor
     ) -> torch.Tensor:
@@ -405,6 +426,27 @@ def contact_no_vel(env, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityCfg = 
     return torch.sum(penalize, dim=(1,2))
 
 
+def debug_print_joint_order(env: ManagerBasedRLEnv,
+                            asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
+    """
+    Print the full joint (DOF) ordering for the given articulated asset.
+    """
+    asset = env.scene[asset_cfg.name]
+
+    # IsaacLab puts the canonical order in `asset.dof_names`; fall back if needed
+    try:
+        joint_names = asset.dof_names
+    except AttributeError:
+        try:
+            joint_names = asset.joint_names
+        except AttributeError:
+            joint_names = list(asset.cfg.init_state.joint_pos.keys())
+
+    print("\n===== Joint order for", asset_cfg.name, "=====")
+    for i, name in enumerate(joint_names):
+        print(f"[{i:02d}]  {name}")
+    print("="*40, "\n")
+
 def track_joint_angles_exp(
     env: ManagerBasedRLEnv,
     std: float = 0.05,           # controls steepness of the exponential
@@ -418,6 +460,7 @@ def track_joint_angles_exp(
     """
     # 1) grab the articulation
     asset = env.scene[asset_cfg.name]
+    # debug_print_joint_order(env)
 
     # 2) get the ordering of joint names
     try:
@@ -1321,54 +1364,153 @@ def contact_no_vel_amber(
     return penalty
 
 
+def stride_consistency_penalty(
+    env: ManagerBasedRLEnv,
+    left_sensor_name:  str = "contact_forces_left",
+    right_sensor_name: str = "contact_forces_right",
+    force_thresh: float     = 1.0,
+    max_penalty:   float    = 0.30,   # clamp (m) so an outlier can’t explode loss
+    debug: bool             = False,
+) -> torch.Tensor:
+    """
+    On every *new* foot-landing event:
+        stride  = |x_curr − x_prev_same_foot|
+        diff    = |stride − stride_prev_same_foot|
+        reward  = − clamp(diff , 0 , max_penalty)
+
+    • Returns latest penalty, held constant until the next landing.
+    • First two landings of each foot get 0 (no previous stride to compare).
+    """
+    N, dev = env.num_envs, env.device
+
+    # ------------- detect “new landing” (rising‐edge contact) -------------- #
+    def contact_bool(sensor_name):
+        fh = env.scene.sensors[sensor_name].data.net_forces_w_history
+        return fh.norm(dim=-1).max(dim=1)[0].max(dim=1)[0] > force_thresh   # bool[N]
+
+    c_L = contact_bool(left_sensor_name)
+    c_R = contact_bool(right_sensor_name)
+
+    fn = stride_consistency_penalty
+    if not hasattr(fn, "_init"):
+        fn._prev_L        = torch.zeros(N, device=dev, dtype=torch.bool)
+        fn._prev_R        = torch.zeros(N, device=dev, dtype=torch.bool)
+        fn._prev_x_L      = torch.zeros(N, device=dev)   # last landing x
+        fn._prev_x_R      = torch.zeros(N, device=dev)
+        fn._prev_stride_L = torch.zeros(N, device=dev)   # last stride length
+        fn._prev_stride_R = torch.zeros(N, device=dev)
+        fn._reward_hold   = torch.zeros(N, device=dev)
+        fn._have_prev_L   = torch.zeros(N, device=dev, dtype=torch.bool)
+        fn._have_prev_R   = torch.zeros(N, device=dev, dtype=torch.bool)
+        fn._init          = True
+
+    rise_L = c_L & ~fn._prev_L
+    rise_R = c_R & ~fn._prev_R
+    fn._prev_L.copy_(c_L)
+    fn._prev_R.copy_(c_R)
+
+    # ------------- x positions -------------------------------------------- #
+    asset = env.scene["robot"]
+    pos_w = asset.data.body_pos_w
+    B     = pos_w.shape[1]
+    x_L   = pos_w[:, B-2, 0]        # left toe x
+    x_R   = pos_w[:, B-1, 0]        # right toe x
+
+    # ------------- process left landings ---------------------------------- #
+    if rise_L.any():
+        idx = rise_L.nonzero(as_tuple=False).flatten()
+        stride = (x_L[idx] - fn._prev_x_L[idx]).abs()
+        diff   = (stride - fn._prev_stride_L[idx]).abs()
+        penalty = -torch.clamp(diff, 0.0, max_penalty)
+
+        # store for next time
+        fn._prev_stride_L[idx] = torch.where(fn._have_prev_L[idx], stride, stride*0)
+        fn._prev_x_L[idx]      = x_L[idx]
+        fn._have_prev_L[idx]   = True
+
+        fn._reward_hold[idx]   = penalty
+
+        if debug:
+            for i,s,d,p in zip(idx.tolist(), stride.tolist(), diff.tolist(), penalty.tolist()):
+                print(f"[L land env{i}] stride={s:.3f} diff={d:.3f} penalty={p:.3f}")
+
+    # ------------- process right landings --------------------------------- #
+    if rise_R.any():
+        idx = rise_R.nonzero(as_tuple=False).flatten()
+        stride = (x_R[idx] - fn._prev_x_R[idx]).abs()
+        diff   = (stride - fn._prev_stride_R[idx]).abs()
+        penalty = -torch.clamp(diff, 0.0, max_penalty)
+
+        fn._prev_stride_R[idx] = torch.where(fn._have_prev_R[idx], stride, stride*0)
+        fn._prev_x_R[idx]      = x_R[idx]
+        fn._have_prev_R[idx]   = True
+
+        fn._reward_hold[idx]   = penalty
+
+        if debug:
+            for i,s,d,p in zip(idx.tolist(), stride.tolist(), diff.tolist(), penalty.tolist()):
+                print(f"[R land env{i}] stride={s:.3f} diff={d:.3f} penalty={p:.3f}")
+
+    # hold last computed penalty until next landing
+    return fn._reward_hold
+
+
 def joint_symmetry_cycle(
     env: ManagerBasedRLEnv,
-    Ts: float            = 0.4,     # single-step duration  (cycle = 2 Ts)
-    asset_name: str      = "robot",
-    std: float           = 0.15,    # width for exp decay when within threshold
-    diff_threshold: float = 0.10,   # radians; beyond this we penalise
-    reward_good: float    = 1.0,    # reward if diff ≤ threshold
-    penalty_slope: float  = 2.0,    # multiplier for (diff − diff_threshold)
+    Ts: float             = 0.4,      # single-step duration  (2 Ts per cycle)
+    asset_name: str       = "robot",
+    std: float            = 0.15,     # width for exp decay (rad)
+    diff_threshold: float = 0.10,     # rad; beyond ⇒ penalty
+    reward_good: float    = 1.0,      # base reward if within threshold
+    penalty_slope: float  = 2.0,      # slope for excess diff
     debug: bool           = False,
 ) -> torch.Tensor:
     """
-    Per 2 Ts cycle:
-        diff = Σ_j |μ_L^j(first-half) − μ_R^j(second-half)| +
-               Σ_j |μ_R^j(first-half) − μ_L^j(second-half)|     (j∈{q1,q2})
+    Same half-cycle definition as `rcs_phase_reward_no_pos`:
 
-        reward =
-            reward_good * exp(−diff / std)          if diff ≤ diff_threshold
-            − penalty_slope * (diff − diff_threshold)  otherwise
+        φ  = (t mod 2Ts) / 2Ts
+        sin(2πφ) > 0  →  “first” half (right stance in `rcs_phase_reward`)
+        sin(2πφ) < 0  →  “second” half (left stance)
 
-    Reward is computed once per full cycle and held constant until the next.
+    We collect joint averages in each half and, at every transition
+    2nd→1st half, compute
+
+        diff = Σ_j | μ_L^j(first) − μ_R^j(second) |
+             + Σ_j | μ_R^j(first) − μ_L^j(second) |
+
+    Reward held for the next cycle:
+
+        +reward_good * exp(−diff/std)           if diff ≤ diff_threshold
+        −penalty_slope · (diff − diff_threshold) otherwise
     """
     N, dev = env.num_envs, env.device
     t      = env.sim.current_time
     asset  = env.scene[asset_name]
 
-    # --- joint indices ---------------------------------------------------- #
+    # ---------------- joint indices --------------------------------------- #
     try:
-        names = asset.dof_names
+        jnames = asset.dof_names
     except AttributeError:
-        names = list(asset.cfg.init_state.joint_pos.keys())
+        jnames = list(asset.cfg.init_state.joint_pos.keys())
 
-    idx_q1L = names.index("q1_left")
-    idx_q2L = names.index("q2_left")
-    idx_q1R = names.index("q1_right")
-    idx_q2R = names.index("q2_right")
+    idx_q1L = jnames.index("q1_left")
+    idx_q2L = jnames.index("q2_left")
+    idx_q1R = jnames.index("q1_right")
+    idx_q2R = jnames.index("q2_right")
 
     q = asset.data.joint_pos                                # [N,D]
     qL = torch.stack((q[:, idx_q1L], q[:, idx_q2L]), dim=1) # [N,2]
     qR = torch.stack((q[:, idx_q1R], q[:, idx_q2R]), dim=1) # [N,2]
 
-    # --- cycle / half-cycle indexing ------------------------------------- #
+    # ---------------- half-cycle indexing (matched to rcs_phase) ---------- #
     cycle_len = 2 * Ts
-    half_idx  = int((t % cycle_len) // Ts)        # 0 or 1
+    phi       = (t % cycle_len) / cycle_len                 # φ ∈ [0,1)
+    half_idx  = 0 if math.sin(2 * math.pi * phi) > 0 else 1 # 0=first,1=second
     cycle_id  = int(math.floor(t / cycle_len))
 
-    # --- persistent buffers ---------------------------------------------- #
+    # ---------------- persistent buffers ---------------------------------- #
     fn = joint_symmetry_cycle
-    if not hasattr(fn, "_init"):
+    if not hasattr(fn, "_prev_half"):
         fn._prev_half   = torch.full((N,), -1, device=dev, dtype=torch.long)
         fn._sum_L_h0    = torch.zeros((N,2), device=dev)
         fn._sum_R_h0    = torch.zeros((N,2), device=dev)
@@ -1377,7 +1519,6 @@ def joint_symmetry_cycle(
         fn._sum_R_h1    = torch.zeros((N,2), device=dev)
         fn._cnt_h1      = torch.zeros((N,),  device=dev, dtype=torch.long)
         fn._reward_hold = torch.zeros((N,),  device=dev)
-        fn._init        = True
 
     # accumulate
     if half_idx == 0:
@@ -1391,10 +1532,10 @@ def joint_symmetry_cycle(
 
     # detect full-cycle boundary (half 1 → 0)
     prev_half = fn._prev_half
-    new_cycle_mask = (prev_half == 1) & (half_idx == 0)
+    new_cycle = (prev_half == 1) & (half_idx == 0)
 
-    if new_cycle_mask.any():
-        idx = new_cycle_mask.nonzero(as_tuple=False).flatten()
+    if new_cycle.any():
+        idx = new_cycle.nonzero(as_tuple=False).flatten()
 
         μL0 = fn._sum_L_h0[idx] / fn._cnt_h0[idx].clamp(min=1).unsqueeze(-1)
         μR0 = fn._sum_R_h0[idx] / fn._cnt_h0[idx].clamp(min=1).unsqueeze(-1)
@@ -1410,16 +1551,20 @@ def joint_symmetry_cycle(
         )
         fn._reward_hold[idx] = reward_cycle
 
-        # reset accumulators for new cycle
+        # reset accumulators
         fn._sum_L_h0[idx].zero_(); fn._sum_R_h0[idx].zero_(); fn._cnt_h0[idx].zero_()
         fn._sum_L_h1[idx].zero_(); fn._sum_R_h1[idx].zero_(); fn._cnt_h1[idx].zero_()
 
         if debug:
             for i, d, r in zip(idx.tolist(), diff.tolist(), reward_cycle.tolist()):
-                print(f"[cycle {cycle_id-1}] env {i}: diff={d:.3f}  reward={r:+.3f}")
+                print(f"[cycle {cycle_id-1}] env{i} diff={d:.3f} reward={r:+.3f}")
 
     # update half tracker
-    prev_half.fill_(half_idx)
+    fn._prev_half.fill_(half_idx)
+
+    # optional phase alignment check
+    if debug and env.num_envs > 0:
+        print(f"[{t:6.3f}s] half_idx={half_idx}  (0=sin>0)  prev_half={prev_half[0]}")
 
     return fn._reward_hold
 
@@ -1587,6 +1732,49 @@ def base_lin_vel_amber(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = Scene
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
     return asset.data.body_link_lin_vel_w[:,3,:]
+
+## Observation
+
+def base_ang_vel_amber(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """
+    Amber-specific angular velocity observation.
+
+    Returns a [num_envs, 3] tensor with the **world-frame** angular velocity
+    of body-link index 3 (the de-facto “root” for Amber).
+    """
+    asset = env.scene[asset_cfg.name]                      # articulation / rigid-object
+    # body_link_ang_vel_w: [N, n_bodies, 3]  – pick index 3
+    # print(asset.data.body_link_ang_vel_w[:, 3, :])
+    return asset.data.body_link_ang_vel_w[:, 3, :]
+
+# World gravity as a constant 3-vector (same one Isaac Lab uses)
+_G_VEC_W = torch.tensor([0.0, 0.0, -1.0])
+
+
+def projected_gravity_amber(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """
+    Returns the 3-vector of the world gravity direction expressed
+    in the *body frame of link 3* (Amber’s de-facto “root”).
+
+    Shape:  [num_envs, 3]
+    """
+    asset = env.scene[asset_cfg.name]                     # articulation / rigid-object
+    quat  = asset.data.body_link_quat_w[:, 3, :]          # [N,4]  (w,x,y,z) of link 3
+    # ensure gravity vector on correct device & dtype
+    g_vec = _G_VEC_W.to(quat)
+
+    # broadcast g_vec to match envs
+    g = g_vec.expand(quat.shape[0], 3)
+
+    # rotate into body frame via inverse quaternion
+    g_body = quat_apply_inverse(quat, g)       # [N,3]
+    return g_body
 
 
 ## LIP

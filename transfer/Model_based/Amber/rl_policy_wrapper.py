@@ -98,7 +98,7 @@ class RLPolicy:
 
         # 0:3 — base angular velocity
         obs[0:3] = body_ang_vel * self.ang_vel_scale
-
+        # print("----------------",body_ang_vel)
         # 3:6 — projected gravity
         obs[3:6] = projected_gravity
 
@@ -113,7 +113,8 @@ class RLPolicy:
 
         # 16:23 — joint velocities (scaled)
         obs[16:23] = qvel * self.qvel_scale
-
+        # print(f"qvel shape:{qvel}")
+        # print(f"qscale:{self.qvel_scale}")
         # 23:27 — previous action (isaac-ordered) shape (4,)
         obs[23:27] = self.action_isaac
 

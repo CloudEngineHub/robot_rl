@@ -37,7 +37,9 @@ from isaaclab.scene import InteractiveScene
 
 from transfer.Model_based.Amber.rl_policy_wrapper import RLPolicy
 from transfer.Model_based.Amber.amber_cfg import NewRobotsSceneCfg
-from transfer.Model_based.Amber.amber_utils import get_projected_gravity, run_simulator
+from transfer.Model_based.Amber.amber_utils import run_simulator
+# from transfer.Model_based.Amber.amber_utils_copy import run_simulator
+
 
 def main():
     
@@ -58,7 +60,7 @@ def main():
     # ─── Load your policy ───
     with open(args_cli.config_file) as f:
         cfg = yaml.load(f, Loader=yaml.FullLoader)
-
+    # print("num action:",cfg["num_action"])
     policy = RLPolicy(
         dt=cfg["dt"],
         checkpoint_path=str(cfg["checkpoint_path"]),

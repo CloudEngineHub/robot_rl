@@ -489,10 +489,14 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
             qpos = amber.data.joint_pos.cpu().numpy()[0]      # (7,)
             qvel = amber.data.joint_vel.cpu().numpy()[0]      # (7,)
             root = amber.data.root_state_w.cpu().numpy()[0]   # (13,)
-            ori  = root[3:7]
-            quat = np.array([ori[3], ori[0], ori[1], ori[2]], dtype=np.float32)
-            body_ang_vel = root[10:13].astype(np.float32)     # (3,)
+            # ori  = root[3:7]
+            # quat = np.array([ori[3], ori[0], ori[1], ori[2]], dtype=np.float32)
+            # body_ang_vel = root[10:13].astype(np.float32)     # (3,)
+            # use body-frame (torso) quat, not the fixed root link
+            ori  = amber.data.body_quat_w[0, 3, :].cpu().numpy()   # (4,)  qw,qx,qy,qz
+            quat = np.array([ori[0], ori[1], ori[2], ori[3]], dtype=np.float32)  # same order
 
+            body_ang_vel = amber.data.body_link_ang_vel_w[0, 3, :]
             des_vel = np.array(args_cli.desired_vel, dtype=np.float32)
 
             # ─── Build observation & run policy ───
@@ -506,7 +510,7 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
             )
             _ = policy.get_action(obs.to(device))   # updates policy.action_isaac
             action_isaac = policy.action_isaac       # (4,)
-
+            # action_isaac = policy.get_action(obs.to(device))
             # ─── Convert to torch targets ───
             default_all   = amber.data.default_joint_pos.clone()  # (1,7)
             target_tensor = torch.from_numpy(action_isaac).to(device).unsqueeze(0)  # (1,4)
@@ -529,7 +533,7 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
             #     frequency=1    # one cycle every 10 seconds
             # )   
 
-            # amber.set_joint_position_target(joint_targets)
+            amber.set_joint_position_target(joint_targets)
             # sinusoid_test(amber, sim_time, amplitude=0.5, frequency=2)
 
             # feed_reference_trajectory(sim_time, scene, args_cli)

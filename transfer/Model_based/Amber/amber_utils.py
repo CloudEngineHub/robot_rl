@@ -6,6 +6,8 @@ from isaaclab.utils.math import euler_xyz_from_quat, wrap_to_pi, quat_rotate_inv
 import omni.usd
 import math,time
 from source.robot_rl.robot_rl.tasks.manager_based.robot_rl.amber.amber_env_cfg import PERIOD,WDES
+PERIOD=1
+Swing_ht=0.08
 import casadi as ca
 reference_step = ca.Function.load("transfer/Model_based/Amber/amber_reference_step.casadi")
 from pathlib import Path
@@ -20,7 +22,7 @@ def get_projected_gravity(quat: np.ndarray) -> np.ndarray:
     pg[1] = -2 * (qz * qy + qw * qx)
     pg[2] = 1 - 2 * (qw * qw + qz * qz)
     return pg
-
+debug=True
 
 import math
 
@@ -241,12 +243,13 @@ def compute_step_location_local(
         return quat_rotate(yaw_quat(quat_inv(quat)), v)
     def to_global(v, quat):
         return quat_rotate(yaw_quat(quat), v)
-
+    # print("body quat :",amber.data.body_quat_w[:,3,:])
+    # print("root quat",amber.data.root_quat_w)
     # 7) final ICP in local frame
     exp_omT = math.exp(omega * Tswing)
     icp_f = (
         exp_omT * icp_0
-        + (1 - exp_omT) * to_local(r - stance_foot, amber.data.root_quat_w)
+        + (1 - exp_omT) * to_local(r - stance_foot, amber.data.body_quat_w[:,3,:])
     )
     icp_f[:, 2] = 0.0
 
@@ -263,7 +266,7 @@ def compute_step_location_local(
     p_local[:, 1] = torch.clamp(icp_f[:, 1] - b[:, 1], -0.3, 0.3)
 
     # 10) back to world, zero Z
-    p = to_global(p_local, amber.data.root_quat_w) + r
+    p = to_global(p_local, amber.data.body_quat_w[:,3,:]) + r
     p[:, 2] = 0.0
 
     # --- OVERRIDE lateral step to your robot’s original Y ---
@@ -453,38 +456,47 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
 
     # ─── Frequency settings ────────────────────────────────────────────────────
     policy_rate = 4  # every 4 steps → 200/4 = 50 Hz
-    lip_rate    = max(1, int((PERIOD/2.0) / sim_dt))  # half‐cycle every Tswing
-    print(lip_rate)
+    lip_rate    = max(1, int((PERIOD/2.0) / sim_dt))  # half‐cycle interval
+
+    # ─── Buffers for inline swing trajectory + IK ─────────────────────────────
+    N                 = 80
+    pfoot_l_buffer    = None   # shape (n_envs, N, 3)
+    pfoot_r_buffer    = None
+    buffer_idx        = 0
+    swing_left_flag   = False
+    foot_l_init       = None   # world‐frame pos at start of swing
+    foot_r_init       = None
+    com_init          = None   # world‐frame COM at start
+    q_guess           = ca.DM([0.,0.,0.,0.])
+
     try:
         while simulation_app.is_running():
-            # pump events
             simulation_app.update()
 
             # ────────────────────── Global reset every 500 steps ───────────────────
-            # if count % 500 == 0:
-            #     count = 0
-            #     scene.reset()
-            #     sim.reset()
-            #     # Reset Amber to default
-            #     root = amber.data.default_root_state.clone()
-            #     root[:, :3] += scene.env_origins
-            #     amber.write_root_pose_to_sim(root[:, :7])
-            #     amber.write_root_velocity_to_sim(root[:, 7:])
-            #     amber.write_joint_state_to_sim(
-            #         amber.data.default_joint_pos.clone(),
-            #         amber.data.default_joint_vel.clone(),
-            #     )
-            #     scene.write_data_to_sim()
-            #     sim.step()
-            #     scene.update(sim_dt)
-            #     print("[INFO]: Resetting all robots state...")
+            if count % 500 == 0:
+                count = 0
+                scene.reset()
+                sim.reset()
+                root = amber.data.default_root_state.clone()
+                root[:, :3] += scene.env_origins
+                amber.write_root_pose_to_sim(root[:, :7])
+                amber.write_root_velocity_to_sim(root[:, 7:])
+                amber.write_joint_state_to_sim(
+                    amber.data.default_joint_pos.clone(),
+                    amber.data.default_joint_vel.clone(),
+                )
+                scene.write_data_to_sim()
+                sim.step()
+                scene.update(sim_dt)
+                print("[INFO]: Resetting all robots state...")
 
             # ────────────── Policy (or tuning) at lower frequency ─────────────────
             if count % policy_rate == 0:
-                # Gather sensors
+                # Gather sensor data
                 qpos = amber.data.joint_pos.cpu().numpy()[0]
                 qvel = amber.data.joint_vel.cpu().numpy()[0]
-                root = amber.data.root_state_w.cpu().numpy()[0]
+                root = amber.data.body_state_w.cpu().numpy()[0,3] #3 is for 'torso'
                 ori  = root[3:7]
                 quat = np.array([ori[3], ori[0], ori[1], ori[2]], dtype=np.float32)
                 body_ang_vel = root[10:13].astype(np.float32)
@@ -512,23 +524,16 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                     idx = all_names.index(name)
                     joint_targets[:, idx] = tensor4[0, i]
 
-                #PD tuning
-                # pd_tuning_sine(
-                #     amber,
-                #     sim_time,
-                #     amplitude=1,   # try 0.1…0.5 rad
-                #     frequency=1    # one cycle every 10 seconds
-                # )
-
+                # Choose one of your modes:
                 # amber.set_joint_position_target(joint_targets)
-                # sinusoid_test(amber, sim_time, amplitude=0.5, frequency=2)
-                # feed_reference_trajectory(sim_time, scene, args_cli)
-
+                # pd_tuning_sine(...)
+                # sinusoid_test(...)
+                # feed_reference_trajectory(...)
                 scene.write_data_to_sim()
 
-            # ─────────── LIP‐ICP & swing‐trajectory every half cycle ───────────────
+            # ─────────── LIP‐ICP + inline Bézier trajectory every half‐cycle ────────
             if count % lip_rate == 0:
-                t0=time.time()
+                # Compute next foot target
                 next_foot = compute_step_location_local(
                     sim_time=   sim_time,
                     scene=      scene,
@@ -538,19 +543,120 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                     wdes=       WDES,
                     visualize=  True
                 )
-                print("time for lip",time.time()-t0)
-                swing_foot_trajectory(sim, scene, args_cli,
-                                      next_foot,
-                                      sim_dt=sim_dt,
-                                      swing_height=0.07,
-                                      N=100
-                )
+                # Capture initial foot & COM positions
+                # Capture initial foot & COM positions
+                pos_world   = amber.data.body_pos_w.cpu().numpy()[0]   # (B,3)
+                B           = pos_world.shape[0]
+                foot_l_init = pos_world[B-2].copy()
+                foot_r_init = pos_world[B-1].copy()
+                com_init    = pos_world[3].copy()
+                swing_left_flag = float(next_foot[0,1].cpu()) < com_init[1]
+                if swing_left_flag:
+                    print("left ", foot_l_init, next_foot)
+                else:
+                    print("right", foot_r_init, next_foot)
 
-            # ───────────────────────── Physics step ────────────────────────────────
-            sim.step()
-            scene.update(sim_dt)
-            sim_time += sim_dt
-            count   += 1
+                # Bézier parameters
+                T       = PERIOD/2.0
+                ts_np   = np.linspace(0.0, T, N)
+                ts      = ca.DM(ts_np)
+                phase_np = np.maximum(0.0, np.minimum(1.0, (ts_np/float(T) - 0.25)*2))
+                phase    = ca.DM(phase_np)
+
+                # 3) Swing height profile via Bézier :contentReference[oaicite:0]{index=0}
+                def cubic_bezier_interpolation(z_start, z_end, t):
+                    t_clamped = ca.fmax(0, ca.fmin(1, t))
+                    bez       = t_clamped**3 + 3*(t_clamped**2)*(1 - t_clamped)
+                    return z_start + (z_end - z_start) * bez
+
+                mask    = phase_np <= 0.5
+                z0      = cubic_bezier_interpolation(ca.DM(0),           ca.DM(Swing_ht), 2*phase)
+                z1      = cubic_bezier_interpolation(ca.DM(Swing_ht),    ca.DM(0),        2*phase - 1)
+                z_array = ca.DM.zeros(N,1)
+                for i in range(N):
+                    z_array[i] = ca.if_else(mask[i], z0[i], z1[i])
+
+                # 4) COM x‐trajectory (linear) and y‐trajectory (constant) :contentReference[oaicite:1]{index=1}
+                v_x     = float(args_cli.desired_vel[0])
+                x_array = com_init[0]+v_x * ts
+                y_array = com_init[1]+ca.DM.zeros(N,1)
+
+                # 5) Build default foot positions DM matrix
+                default_foot_pos_mat = ca.DM.zeros(2,3)
+                default_foot_pos_mat[0,:] = ca.DM(foot_l_init.reshape(3,))
+                default_foot_pos_mat[1,:] = ca.DM(foot_r_init.reshape(3,))
+
+                # Precompute COM start/end in world :contentReference[oaicite:2]{index=2}
+                p_com_0   = ca.vertcat(x_array[0],    y_array[0],    ca.DM(0))
+                p_com_end = ca.vertcat(x_array[-1],   y_array[-1],   ca.DM(0))
+                p_foot_0  = ca.repmat(p_com_0.T, 2, 1) + default_foot_pos_mat
+                p_foot_1  = ca.repmat(p_com_end.T,2, 1) + default_foot_pos_mat
+
+
+                print(f"curr foot:{p_foot_0} to final foot:{p_foot_1}")
+                # 6) Pre-build world‐foot stack for IK :contentReference[oaicite:3]{index=3}
+                foot_w_stack = ca.DM.zeros(6, N)
+                for i in range(N):
+                    ph_i         = phase[i]
+                    foot_world_i = cubic_bezier_interpolation(p_foot_0, p_foot_1, ph_i)
+                    foot_w_stack[:, i] = ca.reshape(foot_world_i, 6, 1)
+                # print("___________",foot_w_stack[:,0])
+                # print("lx:",foot_w_stack[0,:])
+                # print("rx",foot_w_stack[1,:])
+                # print("lz:",foot_w_stack[4,:])
+                # print("rz:",foot_w_stack[5,:])
+                # print("xl:",foot_w_stack[0,:])
+    
+                # Now `foot_w_stack` (6×N DM) holds at column k the full [Lx, Rx,Ly,Ry,Lz,Rz]
+                # and can be stepped through in your IK‐loop immediately afterward.
+                buffer_idx = 0
+            
+
+            # ─────────────── IK follow for buffered trajectory ────────────────────
+            if foot_w_stack is not None and buffer_idx < N:
+                # Build foot targets for CasADi from the precomputed DM stack
+                t_buff_start = time.time()
+
+                # each column of foot_w_stack is [Lx, Ly, Lz, Rx, Ry, Rz]
+                foot_w = foot_w_stack[:, buffer_idx]
+                # print(foot_w)
+
+                # phase + COM
+                phase = ca.DM((buffer_idx + 1) / N)
+                com_x = x_array[buffer_idx]
+                com_y = y_array[buffer_idx]
+                com_x = amber.data.body_pos_w.cpu().numpy()[0,3,0]
+                com_y = amber.data.body_pos_w.cpu().numpy()[0,3,1]
+                # swing‐foot Z is in the same column of foot_w_stack
+                # index 2 for left‐foot, 5 for right‐foot
+                z_dm = ca.DM(foot_w[2] if swing_left_flag else foot_w[5])
+                z_dm= z_array[buffer_idx]
+                # print(f"z_dm:{z_dm}")
+                # IK solve (warm‐started by q_guess)
+                q_cas, _ = reference_step(
+                    phase, foot_w, com_x, com_y, z_dm,
+                    q_guess
+                )
+                q_guess = q_cas
+                if debug:
+                    print(f"x:{com_x}; y:{com_y}; footpos:{foot_w}, z_swing:{z_dm}; IK angles:{q_cas}")
+                    for eid in range(amber.data.joint_pos.shape[0]):
+                        debug_print_joints(amber, env_id=eid)
+                # Scatter into full joint‐target
+                default_all   = amber.data.default_joint_pos.clone().cpu().numpy()
+                joint_targets = default_all.copy()
+                names = list(amber.data.joint_names)
+                q_rad = (np.array(q_cas).astype(float) * math.pi / 180.0)   # ← NEW
+                for i, jn in enumerate(["q1_left","q2_left","q1_right","q2_right"]):
+                    idx = names.index(jn)
+                    joint_targets[0, idx] = float(q_rad[i])
+
+                amber.set_joint_position_target(
+                    torch.from_numpy(joint_targets).to(device)
+                )
+                # print("time for IK sovle:",time.time()-t_buff_start)
+                # print(f"IK for {buffer_idx}/{N}")
+                buffer_idx += 1
 
             # ─────────────────────────── Logging ──────────────────────────────────
             cur_pos = amber.data.joint_pos.cpu().numpy()
@@ -582,8 +688,13 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                 sim.step()
                 scene.update(sim_dt)
                 last_reset_step[to_reset] = count
-
+            # ───────────────────────── Physics step ────────────────────────────────
+            sim.step()
+            scene.update(sim_dt)
+            sim_time += sim_dt
+            count   += 1
     except KeyboardInterrupt:
         print("\n[INFO] Ctrl-C – CSV saved at:", csv_path)
     finally:
         csv_fh.close()
+

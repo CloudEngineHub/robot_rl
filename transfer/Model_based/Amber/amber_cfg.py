@@ -10,7 +10,8 @@ import omni.usd
 from pxr import Gf, UsdPhysics, UsdGeom
 
 
-
+PERIOD=0.8
+WDES=0
 # … (copy over your ROBOT_ASSETS_AMBER, AMBER_CONFIG, NewRobotsSceneCfg) …
 STIFFNESS = 1000
 DAMPING =50

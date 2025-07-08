@@ -165,6 +165,10 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         self.rewards.joint_symmetry_reward.weight        =  2#
         # self.rewards.joint_symmetry_reward.params["diff_threshold"] = 5
         self.rewards.joint_symmetry_reward.params["debug"] = False
+        # penalize asymmetric joints per cycle
+        self.rewards.stride_consistency.weight        =  10#
+        # self.rewards.joint_symmetry_reward.params["diff_threshold"] = 5
+        self.rewards.stride_consistency.params["debug"] = False
         # Reward phase based contacts: stance and wing
         self.rewards.phase_contact.weight                 =  0
         # Reward phase based contacts: stance and wing

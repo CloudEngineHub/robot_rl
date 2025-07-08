@@ -61,15 +61,20 @@ class AmberObservationsCfg(ObservationsCfg):
         # no base linear vel sensor (we only command it, not observe it directly)
         base_lin_vel = None # not avvail
         height_scan = None
-
+        # base_ang_vel= None
         # angular velocity around Y (planar pitch rate; mdp.base_ang_vel returns [wx, wy, wz])
-        # base_ang_vel = ObsTerm(
-        #     func=mdp.base_ang_vel,
-        #     noise=Unoise(n_min=-0.1, n_max=0.1),
-        #     history_length=1,
-        #     scale=0.5,
-        # )
-
+        base_ang_vel = ObsTerm(
+            func  = mdp.base_ang_vel_amber,
+            noise = Unoise(n_min=-0.2, n_max=0.2),
+            history_length = 1,
+            scale = 1.0,          # adjust if you need re-scaling
+        )
+        projected_gravity = ObsTerm(
+            func  = mdp.projected_gravity_amber,
+            noise = Unoise(n_min=-0.05, n_max=0.05),
+            history_length = 1,
+            scale = 1.0,         # adjust if you need scaling
+        )
         # the commanded forward velocity (so the policy knows the target)
         velocity_commands = ObsTerm(
             func=mdp.generated_commands,
@@ -141,6 +146,17 @@ class AmberRewardCfg(RewardsCfg):
             "reward_good":     2.0,
             "penalty_slope":   2.5,   # strength of penalty beyond threshold
             "debug":           False,
+        },
+    )
+    stride_consistency = RewTerm(
+        func   = mdp.stride_consistency_penalty,
+        weight = 10.0,                 # scale relative to your other terms
+        params = {
+            "left_sensor_name":  "contact_forces_left",
+            "right_sensor_name": "contact_forces_right",
+            "force_thresh":      1.0,
+            "max_penalty":       0.8,   # metres
+            "debug":             True,
         },
     )
     # torso angle
