@@ -62,129 +62,110 @@ def get_euler_from_quat(quat):
 
 def _transfer_to_global_frame(vec, root_quat):
     return quat_apply(yaw_quat(root_quat), vec)
-    return quat_apply(yaw_quat(root_quat), vec)
 
 def _transfer_to_local_frame(vec, root_quat):
     return quat_apply(yaw_quat(quat_inv(root_quat)), vec)  
 
 
 class HLIPCommandTerm(CommandTerm):
+    """
+    This class implements the command term for the Hybrid Linear Inverted Pendulum (HLIP) model.
+    """
+
     def __init__(self, cfg: "HLIPCommandCfg", env):
-        # 1. Basic setup
+        # 1. Initialize the parent class
         super().__init__(cfg, env)
+
+        # 2. Store config and main objects
+        self.cfg = cfg
+        self.env = env
+        self.robot = env.scene[cfg.asset_name]
+        
+        # 3. Explicitly set the debug_vis attribute for this instance
+        #    This fixes the AttributeError by ensuring self.debug_vis always exists.
+        self.debug_vis = cfg.debug_vis
+
+        # 4. Extract parameters from config
         self.T_ds = cfg.T_ds
         self.z0 = cfg.z0
         self.y_nom = cfg.y_nom
 
-        # -- DEFERRED INITIALIZATION --
-        # Define the attributes here and set them to None.
-        # This MUST be done early, before they are used by any other code.
-        self.T = None
-        self.hlip_controller = None
-        # ---------------------------
-        
-        self.debug_vis = cfg.debug_vis
-        if self.debug_vis:
-            self.footprint_visualizer = VisualizationMarkers(cfg.footprint_cfg)
-        
-        self.env = env
-
-        # 2. Define the robot and find its parts
-        self.robot = env.scene[cfg.asset_name]
+        # 5. Find robot body and joint indices
         self.feet_bodies_idx = self.robot.find_bodies(cfg.foot_body_name)[0]
         self.upper_body_joint_idx = self.robot.find_joints(cfg.upper_body_joint_name)[0]
 
-        # 3. Use the robot parts info to define state sizes and allocate tensors
+        # 6. Initialize tensors for state and metrics
         self.foot_target = torch.zeros((self.num_envs, 2), device=self.device)
         self.metrics = {}
-        
         n_output = 12 + len(self.upper_body_joint_idx)
-        
         self.y_out = torch.zeros((self.num_envs, n_output), device=self.device)
         self.dy_out = torch.zeros((self.num_envs, n_output), device=self.device)
         self.y_act = torch.zeros((self.num_envs, n_output), device=self.device)
         self.dy_act = torch.zeros((self.num_envs, n_output), device=self.device)
-        
-        # 4. Initialize everything else
-        self.com_z = torch.ones((self.num_envs), device=self.device)*self.z0
-        gravity_scalar = abs(self.env.cfg.sim.gravity[2])
-        # Create a 1D tensor (vector) with this value for each environment.
-        self.grav = torch.full((self.num_envs,), gravity_scalar, device=self.device)
-        self.mass = sum(self.robot.data.default_mass.T)[0]
 
-        self.clf = CLF(n_output, self.env.cfg.sim.dt*self.env.cfg.sim.render_interval,
+        # 7. Initialize physics and controller-related tensors
+        self.com_z = torch.full((self.num_envs,), self.z0, device=self.device)
+        gravity_scalar = abs(self.env.cfg.sim.gravity[2])
+        self.grav = torch.full((self.num_envs,), gravity_scalar, device=self.device)
+        self.mass = self.robot.data.default_mass.sum()
+
+        # 8. Initialize CLF controller
+        self.clf = CLF(
+            n_output, self.env.cfg.sim.dt * self.env.cfg.sim.render_interval,
             batch_size=self.num_envs,
             Q_weights=np.array(cfg.Q_weights),
             R_weights=np.array(cfg.R_weights),
             device=self.device
         )
-        
-        self.v = torch.zeros((self.num_envs), device=self.device)
-        self.vdot = torch.zeros((self.num_envs), device=self.device)
+        self.v = torch.zeros(self.num_envs, device=self.device)
+        self.vdot = torch.zeros(self.num_envs, device=self.device)
         self.v_buffer = torch.zeros((self.num_envs, 100), device=self.device)
         self.vdot_buffer = torch.zeros((self.num_envs, 100), device=self.device)
+
+        # 9. Deferred initialization attributes
+        self.T = None
+        self.hlip_controller = None
         self.stance_idx = None
+        self.stance_foot_pos_0 = torch.zeros((self.num_envs, 3), device=self.device)
+        self.stance_foot_ori_quat_0 = torch.zeros((self.num_envs, 4), device=self.device)
+        self.swing2stance_foot_pos_0 = torch.zeros((self.num_envs, 3), device=self.device)
+        self.stance_foot_ori_0 = torch.zeros((self.num_envs, 3), device=self.device)
+
+        # 10. Visualization setup
+        # Use the self.debug_vis attribute that we explicitly set above.
+        if self.debug_vis:
+            self.footprint_visualizer = VisualizationMarkers(cfg.footprint_cfg)
 
     def _initialize_helpers(self):
-        """Initializes controllers and terms that require a fully initialized environment."""
-        # This check ensures this block runs only once.
-        # It belongs here, at the start of the helper function.
+        """Initializes controllers that require a fully initialized environment."""
         if self.hlip_controller is not None:
             return
 
         print("[INFO] HLIPCommandTerm: Performing deferred initialization...")
-        # 1. get_command() returns the command TENSOR directly.
         gait_period_tensor = self.env.command_manager.get_command("step_period")
-        
-        # 2. We can now use this tensor value directly to set self.T
         self.T = gait_period_tensor / 2
-
-        # 3. Now that self.T is initialized, we can create the HLIP controller
         self.hlip_controller = HLIP(self.grav, self.z0, self.T_ds, self.T, self.y_nom)
-        
+
     @property
     def command(self):
         return self.foot_target
-    
+
+    def get_euler_from_quat(self, quat: torch.Tensor) -> torch.Tensor:
+        """Convert a quaternion to Euler angles (roll, pitch, yaw)."""
+        euler_x, euler_y, euler_z = euler_xyz_from_quat(quat)
+        euler_x = wrap_to_pi(euler_x)
+        euler_y = wrap_to_pi(euler_y)
+        euler_z = wrap_to_pi(euler_z)
+        return torch.stack([euler_x, euler_y, euler_z], dim=-1)
 
     def _resample_command(self, env_ids):
         self._update_command()
-        # Do nothing here
-        # device = self.env.command_manager.get_command("base_velocity").device
-        
-        return
-    
+
     def _update_metrics(self):
-        # Foot tracking
-        # foot_pos = self.robot.data.body_pos_w[:, self.feet_bodies_idx, :2]  # Only take x,y coordinates
-        # # Contact schedule function
-        # tp = (self.env.sim.current_time % (2 * self.T)) / (2 * self.T)  # Scaled between 0-1
-        # phi_c = torch.tensor(math.sin(2 * torch.pi * tp) / math.sqrt(math.sin(2 * torch.pi * tp)**2 + self.T), device=self.env.device)
-
-        # swing_foot_pos = foot_pos[:, int(0.5 + 0.5 * torch.sign(phi_c))]
-        # Only compare x,y coordinates of foot target
-        self.metrics["error_sw_z"] = torch.abs(self.y_out[:,8] - self.y_act[:,8])
-        self.metrics["error_sw_x"] = torch.abs(self.y_out[:,6] - self.y_act[:,6])
-        self.metrics["error_sw_y"] = torch.abs(self.y_out[:,7] - self.y_act[:,7])
-        self.metrics["error_sw_roll"] = torch.abs(self.y_out[:,9] - self.y_act[:,9])
-        self.metrics["error_sw_pitch"] = torch.abs(self.y_out[:,10] - self.y_act[:,10])
-        self.metrics["error_sw_yaw"] = torch.abs(self.y_out[:,11] - self.y_act[:,11])
-        
-
-        self.metrics["error_com_x"] = torch.abs(self.y_out[:,0] - self.y_act[:,0])
-        self.metrics["error_com_y"] = torch.abs(self.y_out[:,1] - self.y_act[:,1])
-        self.metrics["error_com_z"] = torch.abs(self.y_out[:,2] - self.y_act[:,2])
-        self.metrics["error_pelvis_roll"] = torch.abs(self.y_out[:,3] - self.y_act[:,3])
-        self.metrics["error_pelvis_pitch"] = torch.abs(self.y_out[:,4] - self.y_act[:,4])
-        self.metrics["error_pelvis_yaw"] = torch.abs(self.y_out[:,5] - self.y_act[:,5])
-
-
+        self.metrics["error_sw_z"] = torch.abs(self.y_out[:, 8] - self.y_act[:, 8])
+        self.metrics["error_sw_x"] = torch.abs(self.y_out[:, 6] - self.y_act[:, 6])
         self.metrics["v"] = self.v
         self.metrics["vdot"] = self.vdot
-        self.metrics["avg_clf"] =torch.mean(self.v_buffer, dim=-1)
-        max_clf = self.env.reward_manager.get_term_cfg("clf_reward").params["max_clf"]
-        self.metrics["max_clf"] = torch.ones((self.num_envs), device=self.device) * max_clf
-        # return self.foot_target  # Return the foot target tensor for observation
 
     def update_Stance_Swing_idx(self):
         Tswing = self.T - self.T_ds
@@ -200,48 +181,51 @@ class HLIPCommandTerm(CommandTerm):
             stance_changed_env_ids = torch.where(new_stance_idx != self.stance_idx)[0]
 
         if len(stance_changed_env_ids) > 0:
-            changed_stance_foot_idx = new_stance_idx[stance_changed_env_ids]
-            changed_swing_foot_idx = swing_idx[stance_changed_env_ids]
-
             foot_pos_w = self.robot.data.body_pos_w[:, self.feet_bodies_idx, :]
             foot_ori_w = self.robot.data.body_quat_w[:, self.feet_bodies_idx, :]
 
-            # -- START OF FIX --
-            # Initialize all necessary tensors if they don't exist
-            if not hasattr(self, "stance_foot_pos_0"):
-                self.stance_foot_pos_0 = torch.zeros_like(self.robot.data.root_pos_w)
-                self.stance_foot_ori_quat_0 = torch.zeros_like(self.robot.data.root_quat_w)
-                self.swing2stance_foot_pos_0 = torch.zeros_like(self.robot.data.root_pos_w)
-                # This was the missing initialization
-                self.stance_foot_ori_0 = torch.zeros_like(self.robot.data.root_pos_w)
-
+            changed_stance_foot_idx = new_stance_idx[stance_changed_env_ids]
             pos_index = changed_stance_foot_idx.unsqueeze(1).unsqueeze(2).expand(-1, 1, 3)
             ori_index = changed_stance_foot_idx.unsqueeze(1).unsqueeze(2).expand(-1, 1, 4)
-
+            
             stance_pos_at_change = torch.gather(foot_pos_w[stance_changed_env_ids], 1, pos_index).squeeze(1)
             stance_ori_at_change_quat = torch.gather(foot_ori_w[stance_changed_env_ids], 1, ori_index).squeeze(1)
 
-            # Update the tensors ONLY for the environments where the stance foot changed
             self.stance_foot_pos_0[stance_changed_env_ids] = stance_pos_at_change
             self.stance_foot_ori_quat_0[stance_changed_env_ids] = stance_ori_at_change_quat
-            # This was the missing update
             self.stance_foot_ori_0[stance_changed_env_ids] = self.get_euler_from_quat(stance_ori_at_change_quat)
-            # -- END OF FIX --
 
+            changed_swing_foot_idx = swing_idx[stance_changed_env_ids]
             swing_pos_index = changed_swing_foot_idx.unsqueeze(1).unsqueeze(2).expand(-1, 1, 3)
-            swing_pos_at_change = torch.gather(
-                foot_pos_w[stance_changed_env_ids], 1, swing_pos_index
-            ).squeeze(1)
-            
+            swing_pos_at_change = torch.gather(foot_pos_w[stance_changed_env_ids], 1, swing_pos_index).squeeze(1)
             self.swing2stance_foot_pos_0[stance_changed_env_ids] = _transfer_to_local_frame(
                 swing_pos_at_change - stance_pos_at_change, stance_ori_at_change_quat
             )
 
         self.stance_idx = new_stance_idx
         self.swing_idx = swing_idx
-
         self.phase_var = torch.where(self.tp < 0.5, 2 * self.tp, 2 * self.tp - 1)
         self.cur_swing_time = self.phase_var * Tswing
+
+    def _update_command(self):
+        self._initialize_helpers()
+        self.update_Stance_Swing_idx()
+        self.generate_reference_trajectory()
+        self.get_actual_state()
+        
+        vdot,vcur = self.clf.compute_vdot(self.y_act, self.y_out, self.dy_act, self.dy_out, self.cfg.yaw_idx)
+        self.vdot = vdot
+        self.v = vcur
+        
+        self.v_buffer = torch.roll(self.v_buffer, shifts=-1, dims=1)
+        self.vdot_buffer = torch.roll(self.vdot_buffer, shifts=-1, dims=1)
+        self.v_buffer[:, -1] = self.v
+        self.vdot_buffer[:, -1] = self.vdot
+        
+        if self.debug_vis:
+            foot_target_3d = torch.nn.functional.pad(self.foot_target, (0, 1))
+            p_ft_global = _transfer_to_global_frame(foot_target_3d, self.robot.data.root_quat_w) + self.robot.data.root_pos_w
+            self.footprint_visualizer.visualize(translations=p_ft_global)
 
     def generate_orientation_ref(self, base_velocity,N):
         pelvis_euler = torch.zeros((N,3), device=self.device)

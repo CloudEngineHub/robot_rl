@@ -34,7 +34,7 @@ class G1RoughLipCommandsCfg(HumanoidCommandsCfg):
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
-    clf_curriculum = CurrTerm(func=mdp.clf_curriculum, params={"update_interval": 1000, "min_val": 20.0})
+    #clf_curriculum = CurrTerm(func=mdp.clf_curriculum, params={"update_interval": 1000, "min_val": 20.0})
 
 # Lip specific rewards
 ##
@@ -74,7 +74,7 @@ class G1RoughLipRewards(HumanoidRewardCfg):
         params={
             "command_name": "hlip_ref",
             "alpha": 1.0,
-            "max_clf_decreasing": 200.0,
+            "max_clf_decreasing": 100.0,
         }
     )
 
@@ -94,28 +94,6 @@ class G1RoughLipEnvCfg(HumanoidEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
-        
-        
-        self.rewards.holonomic_constraint = RewTerm(
-            func=mdp.holonomic_constraint,
-            weight=4.0,
-            params={"command_name": "hlip_ref", "z_offset": 0.036},
-        )
-        self.rewards.holonomic_constraint_vel = RewTerm(
-            func=mdp.holonomic_constraint_vel,
-            weight=2.0,
-            params={"command_name": "hlip_ref"},
-        )
-        self.rewards.clf_reward = RewTerm(
-            func=mdp.clf_reward,
-            weight=10.0,
-            params={"command_name": "hlip_ref", "max_clf": 100.0},
-        )
-        self.rewards.clf_decreasing_condition = RewTerm(
-            func=mdp.clf_decreasing_condition,
-            weight=-2.0,
-            params={"command_name": "hlip_ref", "max_clf_decreasing": 200.0, "alpha": 1.0},
-        )
         
         ##
         # Scene
@@ -163,9 +141,9 @@ class G1RoughLipEnvCfg(HumanoidEnvCfg):
         ##
         # Commands
         ##
-        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0) # was -1 - 1
-        self.commands.base_velocity.ranges.lin_vel_y = (-0.4, 0.4) # was -0.4 - 0.4
-        self.commands.base_velocity.ranges.ang_vel_z = (-0.3, 0.3) # was -0.3 - 0.3
+        self.commands.base_velocity.ranges.lin_vel_x = (1.0, 1.0) # was -1 - 1
+        self.commands.base_velocity.ranges.lin_vel_y = (0, 0) # was -0.4 - 0.4
+        self.commands.base_velocity.ranges.ang_vel_z = (0, 0) # was -0.3 - 0.3
 
         ##
         # Terminations
@@ -187,8 +165,8 @@ class G1RoughLipEnvCfg(HumanoidEnvCfg):
         self.rewards.joint_deviation_hip = None
         self.rewards.contact_no_vel = None
         self.rewards.alive = None
-        #self.rewards.track_lin_vel_xy_exp = None
-        #self.rewards.track_ang_vel_z_exp = None 
+        self.rewards.track_lin_vel_xy_exp = None
+        self.rewards.track_ang_vel_z_exp = None 
         # self.rewards.track_ang_vel_z_exp.weight = 1.0
  
         # torque, acc, vel, action rate regularization

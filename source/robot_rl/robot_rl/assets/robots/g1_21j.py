@@ -23,27 +23,20 @@ G1_CFG = ArticulationCfg(
         collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.01, rest_offset=0.0),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.75),  # TODO: Consider setting this higher if I init issues
+        pos=(0.0, 0.0, 0.79),
         joint_pos={
             ".*_hip_pitch_joint": -0.42,
             ".*_hip_roll_joint": 0.0,
             ".*_hip_yaw_joint": 0.0,
             ".*_knee_joint": 0.81,
             ".*_ankle_pitch_joint": -0.4,
-            ".*_ankle_roll_joint": 0.,
-            "waist_yaw_joint": 0.,
+            ".*_ankle_roll_joint": 0.0,
+            "waist_yaw_joint": 0.0,
             "left_shoulder_pitch_joint": 0.1,
             "left_shoulder_roll_joint": 0.27,
             "right_shoulder_pitch_joint": 0.1,
             "right_shoulder_roll_joint": -0.27,
             ".*_elbow_joint": 1.2,
-            # ".*_wrist_roll_joint": 0.,
-            # ".*_wrist_pitch_joint": 0.,
-            # ".*_wrist_yaw_joint": 0.,
-            # "left_one_joint": 1.0,
-            # "right_one_joint": -1.0,
-            # "left_two_joint": 0.52,
-            # "right_two_joint": -0.52,
         },
         joint_vel={".*": 0.0},
     ),
@@ -138,7 +131,3 @@ G1_MINIMAL_CFG = G1_CFG.copy()
 
 This configuration removes most collision meshes to speed up simulation.
 """
-
-
-
-

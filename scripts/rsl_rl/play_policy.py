@@ -37,7 +37,7 @@ SIM_ENVIRONMENTS = {
     "flat-hzd-GL": "G1-flat-hzd-GL-play",
     "flat-hzd-no-dr": "G1-flat-hzd-play",
     "stair-hzd": "G1-stair-hzd-play",
-    "stair-hzd-GL": "G1-stair-hzd-GL-play"
+    "stair-hzd-GL": "G1-stair-hzd-GL-play",
     "rough": "G1-rough-clf-play",
     "slight-rough": "G1-slight-rough-clf-play",
 }
