@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import torch
 from typing import TYPE_CHECKING
-import math
-
+import math, time
+import numpy as np
+import csv
 from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import euler_xyz_from_quat, wrap_to_pi, quat_rotate_inverse, yaw_quat, quat_rotate, quat_inv
-from pxr import Gf, UsdGeom
 import omni.usd  
+import torch
+from pxr import Gf, UsdGeom
 
-
+_G = 9.81
 
 def sin_phase(env: ManagerBasedRLEnv, period: float) -> torch.Tensor:
     phase = torch.tensor(2*torch.pi * (env.sim.current_time / period))
@@ -43,118 +45,279 @@ def _phi_contact_scalar(phi: float) -> float:
     s = math.sin(2 * math.pi * phi)
     return s / math.sqrt(s * s + 0.04)
 
-
-@torch.no_grad()
-def future_foot_targets_lip(
-    env: ManagerBasedRLEnv,
-    Ts: float                    = 0.4,          # single-step duration
-    nom_height: float            = 0.45,         # COM height used in LIP
-    wdes: float                  = 0.10,         # desired lateral width (m)
-    command_name: str            = "base_velocity",
-    asset_cfg: SceneEntityCfg    = SceneEntityCfg("robot"),
-    force_thresh: float          = 1.0,          # just for stance detection
+def compute_step_location_local(
+    sim_time: float,
+    scene,
+    num_envs: int,
+    desired_vel: Sequence[float],
+    nom_height: float,
+    Tswing: float,
+    wdes: float,
+    visualize: bool = True
 ) -> torch.Tensor:
     """
-    Observation term that returns **future left & right foot positions** computed
-    with a simple Linear-Inverted-Pendulum ICP algorithm.  Values update only
-    when the corresponding foot enters its swing half-cycle, so the vector is
-    piece-wise constant.
+    Compute next foothold in world‐frame using a local‐frame LIP ICP method.
+    Always recompute on each call (no half‐cycle guard). Returns [num_envs×3].
+    """
+    amber  = scene["robot"]
+    device = amber.data.default_root_state.device
+    n_envs = num_envs
+
+    # --- static storage of original lateral foot‐Y offsets ---
+    if not hasattr(compute_step_location_local, "_orig_foot_y"):
+        pos0   = amber.data.body_pos_w               # (n_envs, n_bodies, 3)
+        B      = pos0.shape[1]
+        feet0  = pos0[:, [B-1, B-2], :]               # (n_envs, 2, 3)
+        compute_step_location_local._orig_foot_y = feet0[:, :, 1].clone()
+
+    # 1) commanded velocity in local frame [N,2]
+    cmd_np  = np.array(desired_vel, dtype=np.float32)
+    command = torch.from_numpy(cmd_np[:2]).to(device).unsqueeze(0).repeat(n_envs, 1)
+
+    # 2) COM position in world from body index 3 [N,3]
+    r = amber.data.body_pos_w[:, 3, :]
+
+    # 3) build ICP base
+    omega = math.sqrt(9.81 / nom_height)
+    icp_0 = torch.zeros((n_envs, 3), device=device)
+    icp_0[:, :2] = command[:, :2] / omega
+
+    # 4) last two foot positions [N,2,3]
+    pos      = amber.data.body_pos_w
+    B        = pos.shape[1]
+    foot_pos = pos[:, [B-1, B-2], :]
+
+    # 5) phase clock → stance foot
+    tp    = (sim_time % (2*Tswing)) / (2*Tswing)
+    phi_c = torch.tensor(
+        math.sin(2*math.pi*tp) / math.sqrt(math.sin(2*math.pi*tp)**2 + Tswing),
+        device=device
+    )
+    stance_idx  = int(0.5 - 0.5 * torch.sign(phi_c).item())
+    stance_foot = foot_pos[:, stance_idx, :].clone()
+    stance_foot[:, 2] = 0.0
+
+    # 6) transforms
+    def to_local(v, quat):
+        return quat_rotate(yaw_quat(quat_inv(quat)), v)
+    def to_global(v, quat):
+        return quat_rotate(yaw_quat(quat), v)
+
+    # 7) final ICP in local frame
+    exp_omT = math.exp(omega * Tswing)
+    icp_f = (
+        exp_omT * icp_0
+        + (1 - exp_omT) * to_local(r - stance_foot, amber.data.body_quat_w[:,3,:])
+    )
+    icp_f[:, 2] = 0.0
+
+    # 8) compute bias b
+    sd = torch.abs(command[:, 0]) * Tswing
+    wd = wdes * torch.ones(n_envs, device=device)
+    bx = sd / (exp_omT - 1.0)
+    by = torch.sign(phi_c) * wd / (exp_omT + 1.0)
+    b  = torch.stack((bx, by, torch.zeros_like(bx)), dim=1)
+
+    # 9) clip in local
+    p_local = icp_f.clone()
+    p_local[:, 0] = torch.clamp(icp_f[:, 0] - b[:, 0], -0.5, 0.5)
+    p_local[:, 1] = torch.clamp(icp_f[:, 1] - b[:, 1], -0.3, 0.3)
+
+    # 10) back to world, zero Z
+    p = to_global(p_local, amber.data.body_quat_w[:,3,:]) + r
+    p[:, 2] = 0.0
+
+    # override lateral step to original Y
+    swing_idx = 1 - stance_idx
+    # --- dynamic override: use the swing foot's current y each call ---
+    # swing_idx already computed above (0 or 1)
+    B = amber.data.body_pos_w.shape[1]
+    # foot_pos was pos[:, [B-1, B-2], :]  → index 0→body B-1, 1→body B-2
+    body_index = (B-1) if swing_idx == 0 else (B-2)
+    # grab the world‐frame y‐coords of that foot
+    current_y = amber.data.body_pos_w[:, body_index, 1]   # [n_envs]
+    # override the lateral coordinate
+    p[:, 1] = current_y
+
+    # USD visualization (same as before)
+    if visualize:
+        stage = omni.usd.get_context().get_stage()
+        # future‐step spheres
+        for i in range(n_envs):
+            path = f"/World/debug/future_step_{i}"
+            if not stage.GetPrimAtPath(path):
+                sph = UsdGeom.Sphere.Define(stage, path)
+                sph.GetRadiusAttr().Set(0.02)
+            else:
+                sph = UsdGeom.Sphere(stage.GetPrimAtPath(path))
+            UsdGeom.XformCommonAPI(sph).SetTranslate(Gf.Vec3d(*p[i].cpu().tolist()))
+
+        # COM as big red sphere
+        com = amber.data.body_pos_w[:, 3, :]
+        for i in range(n_envs):
+            path = f"/World/debug/com_sphere_{i}"
+            if not stage.GetPrimAtPath(path):
+                com_sph = UsdGeom.Sphere.Define(stage, path)
+                com_sph.GetRadiusAttr().Set(0.1)
+                com_sph.CreateDisplayColorAttr().Set([Gf.Vec3f(1.0, 0.0, 0.0)])
+            else:
+                com_sph = UsdGeom.Sphere(stage.GetPrimAtPath(path))
+            UsdGeom.XformCommonAPI(com_sph).SetTranslate(Gf.Vec3d(*com[i].cpu().tolist()))
+
+    # stash into scene for downstream use
+    if not hasattr(scene, "current_des_step"):
+        scene.current_des_step = torch.zeros((n_envs, 3), device=device)
+    scene.current_des_step[:] = p
+
+    return p
+
+
+@torch.no_grad()
+def desired_foot_targets_obs(
+    env: ManagerBasedRLEnv,
+    Ts: float                    = 0.4,                   # half‐cycle duration
+    nom_height: float            = 0.45,                  # pendulum height
+    wdes: float                  = 0.1,                   # desired half‐width
+    command_name: str            = "base_velocity",
+    asset_cfg: SceneEntityCfg    = SceneEntityCfg("robot"),
+    debug: bool                  = False,
+    visualize: bool              = False,
+) -> torch.Tensor:
+    """
+    Returns [N,6] = [Lx,Ly,Lz,  Rx,Ry,Rz]:
+      • runs LIP–ICP once per half‐period to update swing‐foot target
+      • holds previous target for stance foot
+      • debug=True prints COM, last_L, last_R, new_L, new_R for env-0
+      • visualize=True draws spheres for the next swing target & COM
     """
     amber  = env.scene[asset_cfg.name]
     device = env.device
     N      = env.num_envs
 
-    # ------------------------------------------------------------------ #
-    # 0) persistent buffers                                              #
-    # ------------------------------------------------------------------ #
-    fn = future_foot_targets_lip
+    # 0) persistent targets, one per leg
+    fn = desired_foot_targets_obs
     if not hasattr(fn, "_init"):
-        # target positions we will output/hold     shape [N,2,3]  (L,R)
-        pos0       = amber.data.body_pos_w
+        pos0       = amber.data.body_pos_w          # [N, bodies, 3]
         B          = pos0.shape[1]
-        init_left  = pos0[:, B-2, :].clone()
-        init_right = pos0[:, B-1, :].clone()
-        targets    = torch.stack((init_left, init_right), dim=1)  # [N,2,3]
+        init_L     = pos0[:, B-2, :].clone()
+        init_R     = pos0[:, B-1, :].clone()
+        fn._targets   = torch.stack((init_L, init_R), dim=1).to(device)  # [N,2,3]
+        fn._prev_sign = torch.zeros(N, dtype=torch.long, device=device)
+        fn._init      = True
 
-        fn._targets     = targets.to(device)
-        fn._prev_sign   = torch.zeros(N, dtype=torch.long, device=device)
-        fn._orig_y_off  = targets[:, :, 1].clone()                # store native Y
-        fn._init        = True
-
-    targets   = fn._targets
+    targets   = fn._targets       # [N,2,3]
     prev_sign = fn._prev_sign
-    orig_y    = fn._orig_y_off
 
-    # ------------------------------------------------------------------ #
-    # 1) current phase sign                                              #
-    # ------------------------------------------------------------------ #
-    t          = env.sim.current_time
-    phi_cycle  = (t % (2 * Ts)) / (2 * Ts)          # φ ∈ [0,1)
-    phi_cont   = _phi_contact_scalar(phi_cycle)     # scalar
-    sign_now   = 1 if phi_cont > 0 else -1          # +1 right-swing, -1 left-swing
-    sign_now_tensor = torch.full((N,), 1 if phi_cont > 0 else -1,
-                             device=device, dtype=torch.long)
-    # ------------------------------------------------------------------ #
-    # 2) if half-cycle just changed sign → compute a new swing target    #
-    # ------------------------------------------------------------------ #
-    changed = sign_now != prev_sign
-    changed_mask = sign_now_tensor != prev_sign        # bool[N]
+    # snapshot for debug
+    last_L = targets[:, 0, :].clone()
+    last_R = targets[:, 1, :].clone()
 
+    # 1) phase → swing vs stance
+    t         = env.sim.current_time
+    phi_cycle = (t % (2*Ts)) / (2*Ts)           # ∈ [0,1)
+    sign_now  = 1 if phi_cycle > 0.5 else -1
+    sign_tensor  = torch.full((N,), sign_now, dtype=torch.long, device=device)
+    changed_mask = sign_tensor != prev_sign
+
+    # 2) update only on half‐cycle flips
     if changed_mask.any():
-        swing_leg = 1 if sign_now > 0 else 0        # 0=L, 1=R
-        stance_leg= 1 - swing_leg
+        swing = 1 if sign_now > 0 else 0
+        new_steps = compute_step_location_local(
+            sim_time   = t,
+            scene      = env.scene,
+            num_envs   = env.num_envs,
+            desired_vel= env.command_manager.get_command("base_velocity")[0].cpu().tolist(),
+            nom_height = nom_height,
+            Tswing     = Ts,
+            wdes       = wdes,
+            visualize  = False,
+        ) # [N,3]
+        targets[changed_mask, swing, :] = new_steps[changed_mask]
+        prev_sign.copy_(sign_tensor)
 
-        # ---------------- LIP-ICP ------------------------------------- #
-        cmd      = env.command_manager.get_command(command_name)[:, :2]  # [N,2]
-        root_pos = amber.data.body_pos_w[:, 3, :]                        # [N,3]
-        omega    = math.sqrt(_G / nom_height)
+    # 3) debug print
+    if debug and N > 0:
+        # COM
+        com0 = amber.data.body_pos_w[0, 3, :].cpu().numpy()
+        print(f"[t={t:.3f}] COM={com0}")
 
-        icp_0 = torch.zeros((N,3), device=device)
-        icp_0[:, :2] = cmd / omega
+        # current foot positions
+        pos0      = amber.data.body_pos_w[0]           # [bodies,3]
+        B         = pos0.shape[0]
+        curr_L0   = pos0[B-2, :].cpu().numpy()
+        curr_R0   = pos0[B-1, :].cpu().numpy()
+        print(f" curr_L={curr_L0}  curr_R={curr_R0}")
 
-        # feet positions & stance-foot
-        pos_w   = amber.data.body_pos_w
-        foot_L  = pos_w[:, -2, :]
-        foot_R  = pos_w[:, -1, :]
-        feet    = torch.stack((foot_L, foot_R), dim=1)        # [N,2,3]
-        stance  = feet[:, stance_leg, :].clone()
-        stance[:, 2] = 0.0
+        # last targets
+        print(f" last_L={last_L[0].cpu().numpy()}  last_R={last_R[0].cpu().numpy()}")
 
-        to_local  = lambda v, q: quat_rotate(yaw_quat(quat_inv(q)), v)
-        to_global = lambda v, q: quat_rotate(yaw_quat(q), v)
+        # new targets
+        print(f" new_L ={targets[0,0,:].cpu().numpy()}  new_R ={targets[0,1,:].cpu().numpy()}")
 
-        root_q   = amber.data.body_quat_w[:, 3, :]
 
-        exp_wT   = math.exp(omega * Ts)
-        icp_f    = exp_wT * icp_0 + (1 - exp_wT) * to_local(root_pos - stance, root_q)
-        icp_f[:, 2] = 0.0
+    # 4) visualize in USD
+    if visualize:
+        stage = omni.usd.get_context().get_stage()
 
-        sd   = cmd[:, 0].abs() * Ts
-        wd   = wdes * torch.ones(N, device=device)
-        bx   = sd / (exp_wT - 1.0)
-        by   = sign_now * wd / (exp_wT + 1.0)
-        b    = torch.stack((bx, by, torch.zeros_like(bx)), dim=1)
+        # 1) COM as big red sphere
+        com = amber.data.body_pos_w[:, 3, :]  # [N,3]
+        for i in range(N):
+            path = f"/World/debug/com_sphere_{i}"
+            if not stage.GetPrimAtPath(path):
+                sph = UsdGeom.Sphere.Define(stage, path)
+                sph.GetRadiusAttr().Set(0.1)
+                sph.CreateDisplayColorAttr().Set([Gf.Vec3f(1.0, 0.0, 0.0)])
+            else:
+                sph = UsdGeom.Sphere(stage.GetPrimAtPath(path))
+            UsdGeom.XformCommonAPI(sph).SetTranslate(Gf.Vec3d(*com[i].cpu().tolist()))
 
-        p_loc        = icp_f.clone()
-        p_loc[:, 0]  = torch.clamp(p_loc[:, 0] - b[:, 0], -0.5, 0.5)
-        p_loc[:, 1]  = torch.clamp(p_loc[:, 1] - b[:, 1], -0.3, 0.3)
-        p_world      = to_global(p_loc, root_q) + root_pos
-        p_world[:, 2]= 0.0
+        # 2) Last left & right foot contacts
+        # for i in range(N):
+        #     # last left foot (blue)
+        #     ll_path = f"/World/debug/last_left_foot_{i}"
+        #     if not stage.GetPrimAtPath(ll_path):
+        #         sph = UsdGeom.Sphere.Define(stage, ll_path)
+        #         sph.GetRadiusAttr().Set(0.04)
+        #         sph.CreateDisplayColorAttr().Set([Gf.Vec3f(0.0, 0.0, 1.0)])
+        #     else:
+        #         sph = UsdGeom.Sphere(stage.GetPrimAtPath(ll_path))
+        #     UsdGeom.XformCommonAPI(sph).SetTranslate(Gf.Vec3d(*last_L[i].cpu().tolist()))
 
-        # keep original lateral offset
-        p_world[:, 1] = orig_y[:, swing_leg]
+        #     # last right foot (green)
+        #     lr_path = f"/World/debug/last_right_foot_{i}"
+        #     if not stage.GetPrimAtPath(lr_path):
+        #         sph = UsdGeom.Sphere.Define(stage, lr_path)
+        #         sph.GetRadiusAttr().Set(0.04)
+        #         sph.CreateDisplayColorAttr().Set([Gf.Vec3f(0.0, 1.0, 0.0)])
+        #     else:
+        #         sph = UsdGeom.Sphere(stage.GetPrimAtPath(lr_path))
+        #     UsdGeom.XformCommonAPI(sph).SetTranslate(Gf.Vec3d(*last_R[i].cpu().tolist()))
 
-        # update target for swing leg
-        targets[:, swing_leg, :] = p_world
+        # 3) Future left & right foot targets
+        for i in range(N):
+            # future left foot (magenta)
+            fl_path = f"/World/debug/future_left_foot_{i}"
+            if not stage.GetPrimAtPath(fl_path):
+                sph = UsdGeom.Sphere.Define(stage, fl_path)
+                sph.GetRadiusAttr().Set(0.03)
+                sph.CreateDisplayColorAttr().Set([Gf.Vec3f(1.0, 0.0, 1.0)])
+            else:
+                sph = UsdGeom.Sphere(stage.GetPrimAtPath(fl_path))
+            UsdGeom.XformCommonAPI(sph).SetTranslate(Gf.Vec3d(*targets[i, 0, :].cpu().tolist()))
 
-    # store sign for next step
-    prev_sign.fill_(sign_now)
+            # future right foot (yellow)
+            fr_path = f"/World/debug/future_right_foot_{i}"
+            if not stage.GetPrimAtPath(fr_path):
+                sph = UsdGeom.Sphere.Define(stage, fr_path)
+                sph.GetRadiusAttr().Set(0.03)
+                sph.CreateDisplayColorAttr().Set([Gf.Vec3f(1.0, 1.0, 0.0)])
+            else:
+                sph = UsdGeom.Sphere(stage.GetPrimAtPath(fr_path))
+            UsdGeom.XformCommonAPI(sph).SetTranslate(Gf.Vec3d(*targets[i, 1, :].cpu().tolist()))
+        
+    # 5) flatten and return
+    return targets.reshape(N, 6)
 
-    # ------------------------------------------------------------------ #
-    # 3) flatten to [N,6] observation                                    #
-    # ------------------------------------------------------------------ #
-    obs = targets.reshape(N, 6)
-    return obs
 
 
 @torch.no_grad()

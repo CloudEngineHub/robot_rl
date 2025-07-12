@@ -9,6 +9,10 @@ parser = argparse.ArgumentParser(
     description="Add Amber to Isaac Lab, but drive it with a trained policy."
 )
 parser.add_argument(
+    "--use_casadi_ik", action="store_true",
+    help="Use CasADi IK instead of Isaac Differential IK (default = False)"
+)
+parser.add_argument(
     "--config_file", type=Path, required=True,
     help="YAML with keys: checkpoint_path, dt, num_obs, num_action, period, "
             "action_scale, default_angles, qvel_scale, ang_vel_scale, command_scale",
@@ -18,12 +22,34 @@ parser.add_argument(
     help="Where to write joint‐position logs",
 )
 parser.add_argument(
-    "--desired_vel", type=float, nargs=3, default=[-0.5, 0.0, 0.0],
+    "--desired_vel", type=float, nargs=3, default=[-.2, 0.0, 0.0],
     help="Desired base command [vx, vy, vyaw]"
 )
 parser.add_argument(
     "--num_envs", type=int, default=1,
     help="Number of environments to spawn (policy will be applied to env 0 only)."
+)
+def str2bool(v):
+    """
+    Accepts several spellings of a boolean value.
+    """
+    if isinstance(v, bool):
+        return v
+    v = v.lower()
+    if v in ("yes", "true", "t", "1"):
+        return True
+    if v in ("no", "false", "f", "0"):
+        return False
+    raise argparse.ArgumentTypeError("boolean value expected")
+
+
+parser.add_argument(
+    "--debug",
+    nargs="?",
+    const=True,            # `--debug`   → True
+    default=False,         # omitted     → False
+    type=str2bool,         # `--debug t` or `--debug false`
+    help="Enable verbose debug output (default: False)",
 )
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -38,7 +64,7 @@ from isaaclab.scene import InteractiveScene
 from transfer.Model_based.Amber.rl_policy_wrapper import RLPolicy
 from transfer.Model_based.Amber.amber_cfg import NewRobotsSceneCfg
 from transfer.Model_based.Amber.amber_utils import run_simulator
-# from transfer.Model_based.Amber.amber_utils_copy import run_simulator
+# from transfer.Model_based.Amber.amber_utils_policy import run_simulator
 
 
 def main():

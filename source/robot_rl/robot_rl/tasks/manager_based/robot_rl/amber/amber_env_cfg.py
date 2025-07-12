@@ -49,7 +49,7 @@ class AmberActionsCfg:
     )
 
 # TODO: Try playing with the period for the lip model
-PERIOD = 1.2 #0.6 #0.8  # (0.4 s swing phase)
+PERIOD = 0.8 #0.6 #0.8  # (0.4 s swing phase)
 WDES=0.0
 
 @configclass

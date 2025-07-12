@@ -33,10 +33,18 @@ class AmberRoughLipObsCfg(AmberObservationsCfg):
     @configclass
     class PolicyCfg(AmberObservationsCfg.PolicyCfg):
         future_feet = ObsTerm(
-            func            = mdp.future_foot_targets_lip,
-            history_length  = 1,
-            noise           = None,        # or Unoise() if you like
-            scale           = 1.0,         # optional scaling
+            func    = mdp.desired_foot_targets_obs,
+            history_length = 1,
+            scale   = 1.0,
+            params  = {
+                "Ts":           PERIOD/2.0,
+                "nom_height":   1.36,
+                "wdes":         0,
+                "command_name": "base_velocity",
+                "asset_cfg":    SceneEntityCfg("robot"),
+                "debug":        False,
+                "visualize":True
+            },
         )
         current_feet = ObsTerm(
             func           = mdp.current_foot_positions,
@@ -48,10 +56,17 @@ class AmberRoughLipObsCfg(AmberObservationsCfg):
     class CriticCfg(AmberObservationsCfg.CriticCfg):
         # inherit everything the base critic had...
         future_feet = ObsTerm(
-            func=mdp.future_foot_targets_lip,
-            history_length=1,
-            noise=None,
-            scale=1.0,
+            func    = mdp.desired_foot_targets_obs,
+            history_length = 1,
+            scale   = 1.0,
+            params  = {
+                "Ts":           PERIOD/2.0,
+                "nom_height":   1.36,
+                "wdes":         WDES,
+                "command_name": "base_velocity",
+                "asset_cfg":    SceneEntityCfg("robot"),
+                "debug":        False,
+            },
         )
         current_feet = ObsTerm(
             func=mdp.current_foot_positions,
@@ -86,15 +101,15 @@ class AmberRoughLipRewards(AmberRewardCfg):
     #         "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
     #     }
     # )
-    lip_rcs_phase = RewTerm(
-        func   = mdp.rcs_phase_reward,
-        weight = 1.0,                   # scale as you see fit
-        params = {
-            "Ts":                0.4,
+    rcs_phase_with_place = RewTerm(
+        func=mdp.rcs_phase_reward_with_placement,
+        weight=4.0,
+        params={
+            "Ts":                PERIOD/2,
             "left_sensor_name":  "contact_forces_left",
             "right_sensor_name": "contact_forces_right",
             "force_thresh":      1.0,
-            "sigma":             0.05,  # e.g. try 5 cm spread
+            "sigma":             0.05,
             "asset_cfg":         SceneEntityCfg("robot"),
             "debug":             False,
         },
@@ -121,7 +136,7 @@ class AmberRoughLipEventsCfg(AmberEventsCfg):
                                      interval_range_s=(PERIOD / 2., PERIOD / 2.),
                                      is_global_time=False,
                                      params={
-                                         "nom_height": 0.3,
+                                         "nom_height": 1.3,
                                          "Tswing": PERIOD / 2.,
                                          "command_name": "base_velocity",
                                          "wdes": WDES,
@@ -146,10 +161,9 @@ class AmberRoughLipEventsCfg(AmberEventsCfg):
 @configclass
 class AmberRoughLipEnvCfg(AmberRoughEnvCfg):
     """Configuration for the Amber Flat environment."""
-    # rewards: G1RoughLipRewards = G1RoughLipRewards()
-    events: AmberRoughLipEventsCfg = AmberRoughLipEventsCfg()
+    # events: AmberRoughLipEventsCfg = AmberRoughLipEventsCfg()
     observations: AmberRoughLipObsCfg = AmberRoughLipObsCfg()
-    rewards : AmberRoughLipRewards = AmberRoughLipRewards()
+    # rewards : AmberRoughLipRewards = AmberRoughLipRewards()
     def __post_init__(self):
         # post init of parent
         super().__post_init__()

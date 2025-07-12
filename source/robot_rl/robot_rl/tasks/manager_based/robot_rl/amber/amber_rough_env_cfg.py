@@ -166,7 +166,7 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         # self.rewards.joint_symmetry_reward.params["diff_threshold"] = 5
         self.rewards.joint_symmetry_reward.params["debug"] = False
         # penalize asymmetric joints per cycle
-        self.rewards.stride_consistency.weight        =  4#10#
+        self.rewards.stride_consistency.weight        =  20#10#
         # self.rewards.joint_symmetry_reward.params["diff_threshold"] = 5
         self.rewards.stride_consistency.params["debug"] = False
         # Reward phase based contacts: stance and wing
@@ -178,7 +178,7 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         # reward maintaining torso upright within window, penalize beyond threshold
         self.rewards.torso_orientation.weight             =    0.2#2.0  
         # reward alternating foot contacts vs repeats
-        self.rewards.alternation_contact.weight           =   2
+        self.rewards.alternation_contact.weight           =   4
         # reward progressive foot placement per cycle
         self.rewards.progressive_step.weight              =    .2#15.0  
         # per‐cycle foot‐contact correctness (+5 for exactly one each, else penalty)
@@ -190,7 +190,7 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         # penalize foot sliding (squared speed during contact)
         self.rewards.feet_no_slip_condition.weight        =  -1.5#-10.0  
         # cycle based reward
-        self.rewards.paper_cycle_reward.weight            = 3#5
+        self.rewards.paper_cycle_reward.weight            = 4#5
         self.rewards.paper_cycle_reward.params["debug"]   = False
         # Reward for contact step ahead of com
         self.rewards.com_step_reward.weight               = 0

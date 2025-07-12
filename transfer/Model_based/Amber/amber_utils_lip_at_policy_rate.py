@@ -2,7 +2,7 @@ import csv
 import numpy as np
 import torch
 from pxr import Gf, UsdGeom
-from isaaclab.utils.math import subtract_frame_transforms,euler_xyz_from_quat, wrap_to_pi, quat_rotate_inverse, yaw_quat, quat_rotate, quat_inv
+from isaaclab.utils.math import euler_xyz_from_quat, wrap_to_pi, quat_rotate_inverse, yaw_quat, quat_rotate, quat_inv
 import omni.usd
 import math,time
 from source.robot_rl.robot_rl.tasks.manager_based.robot_rl.amber.amber_env_cfg import PERIOD,WDES
@@ -331,6 +331,7 @@ def compute_step_location_local(
     exp_omT = math.exp(omega * Tswing)
     icp_f = (
         exp_omT * icp_0
+        exp_omT * icp_0
         + (1 - exp_omT) * to_local(r - stance_foot, amber.data.body_quat_w[:,3,:])
     )
     icp_f[:, 2] = 0.0
@@ -520,43 +521,10 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
     sim_dt   = sim.get_physics_dt()            # 0.005s → 200 Hz
     sim_time = 0.0
     count    = 0
-    USE_CASADI_IK = args_cli.use_casadi_ik
-    if USE_CASADI_IK:
-        print("Using custom pin IK")
+
     amber    = scene["Amber"]
     device   = amber.data.default_root_state.device
     n_envs   = args_cli.num_envs
-    # =============================================================================
-    # 2)  Optional import & controller setup  (only built when needed)
-    # =============================================================================
-    if not USE_CASADI_IK:
-        from isaaclab.controllers import DifferentialIKController, DifferentialIKControllerCfg
-        from isaaclab.managers     import SceneEntityCfg
-
-        # --- build once, after scene is created ----------------------------------
-        def build_diff_ik(scene, num_envs, device):
-            # we treat each foot as its own end-effector; choose one per half-cycle
-            diff_cfg = DifferentialIKControllerCfg(
-                command_type      = "pose",
-                use_relative_mode = False,
-                ik_method         = "dls",    # damped-least-squares
-            )
-            return DifferentialIKController(diff_cfg, num_envs=num_envs, device=device)
-
-        # call right after you create the scene:
-        diff_ik = build_diff_ik(scene, n_envs, device)
-
-        # cache some IDs for quick access
-        names = list(amber.data.joint_names)
-        actuated_ids = [names.index(j) for j in ["q1_left", "q2_left", "q1_right", "q2_right"]]
-
-        # body IDs for toes: B-2 (left)  and  B-1 (right)
-        B_total         = amber.num_bodies
-        toe_body_id_L   = B_total - 2
-        toe_body_id_R   = B_total - 1
-    # =============================================================================
-
-    
     debug = args_cli.debug
     # ─── CSV SET-UP ────────────────────────────────────────────────────────────
     csv_path = args_cli.csv_out.expanduser()
@@ -677,7 +645,7 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                     sim_time=   sim_time,
                     scene=      scene,
                     args_cli=   args_cli,
-                    nom_height= 100.3,
+                    nom_height= 1.3,
                     Tswing=     PERIOD/2.0,
                     wdes=       WDES,
                     visualize=  False
@@ -804,45 +772,12 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
 
                 # back to CasADi DM
                 q_guess = ca.DM(q_np)
-                if USE_CASADI_IK:
-                    # IK solve (new signature: no z_swing, but needs com_z)
-                    q_cas, _ = reference_step(
-                        phase, foot_w, com_x_curr, com_y_curr, com_z, q_guess
-                    )
-                    q_guess = q_cas
-                    q_vals   = np.array(q_cas).astype(float).flatten()   # already in rad
 
-                else:
-                    # -------- Isaac-Lab Differential IK -----------------------------------
-                    # 1) Pick which foot is EE this half-cycle
-                    ee_body_id = toe_body_id_L if swing_left_flag else toe_body_id_R
-                    ee_jac_id  = ee_body_id - 1 if amber.is_fixed_base else ee_body_id
-
-                    # 2) Build the pose goal for that foot  (xyz + quaternion)
-                    foot_xyz  = foot_w[0:3] if swing_left_flag else foot_w[3:6]       # DM(3)
-                    goal_pos  = torch.tensor(foot_xyz.full().flatten(), device=device)
-                    goal_quat = torch.tensor([1.0, 0.0, 0.0, 0.0], device=device)      # keep upright
-                    diff_goal = torch.cat((goal_pos, goal_quat)).repeat(n_envs, 1)
-
-                    diff_ik.set_command(diff_goal)
-
-                    # 3) Grab sim data
-                    J     = amber.root_physx_view.get_jacobians()[:, ee_jac_id, :, actuated_ids]
-                    q_act = amber.data.joint_pos[:, actuated_ids]
-                    ee_p  = amber.data.body_pos_w[:, ee_body_id]
-                    ee_q  = amber.data.body_quat_w[:, ee_body_id]
-                    root_p, root_q = amber.data.root_pos_w, amber.data.root_quat_w
-                    # transform EE into root frame
-                    ee_pb, ee_qb = subtract_frame_transforms(root_p, root_q, ee_p, ee_q)
-
-                    # 4) Run diff-IK → desired joint angles
-                    q_des = diff_ik.compute(ee_pb, ee_qb, J, q_act)    # (N_envs, 4)
-
-                    # 5) Pack into the same variable names the rest of your code expects
-                    q_vals = ca.DM(q_des[0].cpu().numpy().reshape(-1, 1))   # 4×1 DM in radians
-                # ------------------------------------------------------------------------- #
-
-
+                # IK solve (new signature: no z_swing, but needs com_z)
+                q_cas, _ = reference_step(
+                    phase, foot_w, com_x_curr, com_y_curr, com_z, q_guess
+                )
+                q_guess = q_cas
                 pos_world_1   = amber.data.body_pos_w.cpu().numpy()[0]   # (B,3)
                 B           = pos_world.shape[0]
                 foot_l_init_curr = pos_world_1[B-2].copy()
@@ -857,22 +792,17 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                     for eid in range(amber.data.joint_pos.shape[0]):
                         debug_print_joints(amber, env_id=eid)
                 # Scatter into full joint‐target
-                # default_all   = amber.data.default_joint_pos.clone().cpu().numpy()
-                # joint_targets = default_all.copy()
+                default_all   = amber.data.default_joint_pos.clone().cpu().numpy()
+                joint_targets = default_all.copy()
                 names = list(amber.data.joint_names)
-                # q_rad = (np.array(q_cas).astype(float))   # ← NEW
-                # for i, jn in enumerate(["q1_left","q2_left","q1_right","q2_right"]):
-                #     idx = names.index(jn)
-                #     joint_targets[0, idx] = float(q_rad[i])
-
-                # amber.set_joint_position_target(
-                #     torch.from_numpy(joint_targets).to(device)
-                # )
-                joint_targets = amber.data.default_joint_pos.clone().cpu().numpy()
+                q_rad = (np.array(q_cas).astype(float))   # ← NEW
                 for i, jn in enumerate(["q1_left","q2_left","q1_right","q2_right"]):
-                    joint_targets[0, names.index(jn)] = q_vals[i]
+                    idx = names.index(jn)
+                    joint_targets[0, idx] = float(q_rad[i])
 
-                amber.set_joint_position_target(torch.from_numpy(joint_targets).to(device))
+                amber.set_joint_position_target(
+                    torch.from_numpy(joint_targets).to(device)
+                )
                 # print("time for IK sovle:",time.time()-t_buff_start)
                 # print(f"IK for {buffer_idx}/{N}")
                 draw_step_and_com(scene, next_foot)

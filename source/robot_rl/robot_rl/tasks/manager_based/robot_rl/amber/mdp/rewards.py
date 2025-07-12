@@ -19,7 +19,7 @@ from isaaclab.markers import VisualizationMarkers
 from isaaclab.utils.math import euler_xyz_from_quat, wrap_to_pi, quat_rotate_inverse, yaw_quat, quat_rotate, quat_inv
 from pxr import Gf, UsdGeom
 import omni.usd  
-
+from .observations import desired_foot_targets_obs,current_foot_positions
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
@@ -1749,70 +1749,82 @@ def rcs_phase_reward_no_pos(
 
     return reward
 
-from .observations import future_foot_targets_lip, current_foot_positions
 
-# in robot_rl/tasks/manager_based/robot_rl/amber/mdp.py
-def rcs_phase_reward(
+@torch.no_grad()
+def rcs_phase_reward_with_placement(
     env: ManagerBasedRLEnv,
-    Ts: float                    = 0.4,      # single‐step duration
-    left_sensor_name: str        = "contact_forces_left",
-    right_sensor_name: str       = "contact_forces_right",
-    force_thresh: float          = 1.0,
-    sigma: float                 = 0.1,      # placement penalty “spread”
-    asset_cfg: SceneEntityCfg    = SceneEntityCfg("robot"),
-    debug: bool                  = False,
+    Ts: float                   = 0.4,
+    left_sensor_name: str       = "contact_forces_left",
+    right_sensor_name: str      = "contact_forces_right",
+    force_thresh: float         = 1.0,
+    sigma: float                = 0.1,
+    nom_height: float           = 0.45,
+    wdes: float                 = 0.1,
+    command_name: str           = "base_velocity",
+    asset_cfg: SceneEntityCfg   = SceneEntityCfg("robot"),
+    debug: bool                 = False,
 ) -> torch.Tensor:
     """
-    r_cs = 9 · (I_R − I_L) · φ_contact · exp(−‖p̂−p‖² / σ)
-    using only the x,y components of:
-      • p (actual) ← current_foot_positions(env)
-      • p̂ (desired) ← future_foot_targets_lip(env)
+    r_cs = 9·(I_R − I_L)·φ_contact·exp(−‖p̂−p‖²/σ), 
+    where p̂ ← desired_foot_targets_obs(...) and p ← current_foot_positions(...)
     """
 
     N, dev = env.num_envs, env.device
     t      = env.sim.current_time
 
-    # 1) phase‐contact scalar
-    phi_cycle = (t % (2*Ts)) / (2*Ts)             # [0,1)
-    phi_c     = _phi_contact_scalar(phi_cycle)   # your existing helper
+    # 1) φ_contact
+    phi_cycle = (t % (2*Ts)) / (2*Ts)
+    phi_cont  = _phi_contact_scalar(phi_cycle)
 
-    # 2) contact booleans
+    # 2) contact flags
     def contact(name):
         fh = env.scene.sensors[name].data.net_forces_w_history
-        # collapse over history & bodies → [N]
-        return (fh.norm(dim=-1).max(dim=1)[0].max(dim=1)[0] > force_thresh).float()
+        return (
+            fh.norm(dim=-1)
+              .max(dim=1)[0]
+              .max(dim=1)[0]
+              > force_thresh
+        ).float()
 
-    I_L = contact(left_sensor_name)   # [N]
-    I_R = contact(right_sensor_name)  # [N]
+    I_L = contact(left_sensor_name)
+    I_R = contact(right_sensor_name)
 
-    # 3) get actual & desired footholds via your obs‐fns
-    #    both return [N,6] = [Lx,Ly,Lz,  Rx,Ry,Rz]
-    future = future_foot_targets_lip(env)  # [N,6]
-    # print(future)
-    current= current_foot_positions(env)   # [N,6]
+    # 3) get desired & actual footholds
+    future = desired_foot_targets_obs(
+        env,
+        Ts=Ts,
+        nom_height=nom_height,
+        wdes=wdes,
+        command_name=command_name,
+        asset_cfg=asset_cfg,
+        debug=False,         # no print inside obs
+        visualize=False,
+    )  # [N,6]
+    current = current_foot_positions(env, asset_cfg=asset_cfg)  # [N,6]
 
-    # split into left/right, take [:, :2] = x,y
-    p_hat_L = future[:, 0:2]
-    p_hat_R = future[:, 3:5]
-    p_act_L = current[:, 0:2]
-    p_act_R = current[:, 3:5]
+    # 4) slice x,y for left & right
+    p_hat_L = future[:, 0:2]; p_hat_R = future[:, 3:5]
+    p_act_L = current[:, 0:2]; p_act_R = current[:, 3:5]
 
-    # 4) select the stance foot’s x,y per env
-    #    if left foot is in contact (I_L=1), use L; if right contact (I_R=1), use R
-    #    (if both or neither contact, this will average them, but usually exactly one is 1)
-    p_hat = I_L.unsqueeze(1)*p_hat_L + I_R.unsqueeze(1)*p_hat_R  # [N,2]
-    p_act = I_L.unsqueeze(1)*p_act_L + I_R.unsqueeze(1)*p_act_R  # [N,2]
+    # 5) pick stance‐foot
+    p_hat = I_L.unsqueeze(1)*p_hat_L + I_R.unsqueeze(1)*p_hat_R
+    p_act = I_L.unsqueeze(1)*p_act_L + I_R.unsqueeze(1)*p_act_R
 
-    # 5) placement‐error penalty
-    sq_err  = (p_hat - p_act).pow(2).sum(dim=1)  # [N]
-    penalty = torch.exp(-sq_err / sigma)        # [N]
+    # 6) placement penalty
+    sq_err  = (p_hat - p_act).pow(2).sum(dim=1)
+    penalty = torch.exp(-sq_err / sigma)
 
-    # 6) assemble final reward
-    reward = 9.0 * (I_R - I_L) * phi_c * penalty  # [N]
+    # 7) final reward
+    reward = 9.0 * (I_R - I_L) * phi_cont * penalty
 
-    if debug and N>0:
-        print(f"[t={t:.3f}] φ={phi_c:+.3f} I_L={I_L[0]:.0f} I_R={I_R[0]:.0f}"
-              f" err={sq_err[0]:.4f} pen={penalty[0]:.3f} r0={reward[0]:+.3f}")
+    # 8) debug print for env-0
+    if debug and N > 0:
+        print(f"[t={t:.3f}] φ={phi_cont:+.3f} "
+              f"I_L={I_L[0]:.0f} I_R={I_R[0]:.0f} "
+              f"p_act={p_act[0].cpu().numpy()} "
+              f"p_hat={p_hat[0].cpu().numpy()} "
+              f"err={sq_err[0]:.4f} pen={penalty[0]:.3f} "
+              f"r0={reward[0]:+.3f}")
 
     return reward
 
@@ -2061,7 +2073,7 @@ def compute_step_location_local_amber(
     exp_omT = math.exp(omega * Tswing)
     icp_f = (
         exp_omT * icp_0
-        + (1 - exp_omT) * to_local(r - stance_foot_pos, asset.data.root_quat_w)
+        + (1 - exp_omT) * to_local(r - stance_foot_pos, asset.data.body_quat_w[:,3,:])
     )
     icp_f[:, 2] = 0.0
 
@@ -2078,7 +2090,7 @@ def compute_step_location_local_amber(
     p_local[:, 1] = torch.clamp(icp_f[:, 1] - b[:, 1], -0.3, 0.3)
 
     # 12) back to global
-    p = to_global(p_local, asset.data.root_quat_w) + r
+    p = to_global(p_local, asset.data.body_quat_w[:,3,:]) + r
     p[:, 2] = 0.0
 
     # 13) optional visualization
