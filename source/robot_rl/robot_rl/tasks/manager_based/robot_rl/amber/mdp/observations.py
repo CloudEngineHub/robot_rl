@@ -249,21 +249,23 @@ def desired_foot_targets_obs(
     changed_mask = sign_tensor != prev_sign
 
     # 2) update only on half‐cycle flips
-    # if changed_mask.any():
-    swing = 1 if sign_now > 0 else 0
-    new_steps = compute_step_location_local(
-        sim_time   = t,
-        scene      = env.scene,
-        num_envs   = env.num_envs,
-        desired_vel= env.command_manager.get_command("base_velocity")[0].cpu().tolist(),
-        nom_height = nom_height,
-        Tswing     = Ts,
-        wdes       = wdes,
-        visualize  = False,
-    ) # [N,3]
-    # targets[changed_mask, swing, :] = new_steps[changed_mask]
-    targets[:, swing, :] = new_steps
-    prev_sign.copy_(sign_tensor)
+    if changed_mask.any():
+        swing = 1 if sign_now > 0 else 0
+        new_steps = compute_step_location_local(
+            sim_time   = t,
+            scene      = env.scene,
+            num_envs   = env.num_envs,
+            desired_vel= env.command_manager.get_command("base_velocity")[0].cpu().tolist(),
+            nom_height = nom_height,
+            Tswing     = Ts,
+            wdes       = wdes,
+            visualize  = False,
+        ) # [N,3]
+        #for half cycle
+        targets[changed_mask, swing, :] = new_steps[changed_mask]
+        #for continious
+        # targets[:, swing, :] = new_steps
+        prev_sign.copy_(sign_tensor)
 
     # 3) debug print
     if debug and N > 0:

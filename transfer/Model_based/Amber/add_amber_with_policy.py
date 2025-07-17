@@ -22,13 +22,19 @@ parser.add_argument(
     help="Where to write joint‐position logs",
 )
 parser.add_argument(
-    "--desired_vel", type=float, nargs=3, default=[-.0, 0.0, 0.0],
+    "--desired_vel", type=float, nargs=3, default=[-.5, 0.0, 0.0],
     help="Desired base command [vx, vy, vyaw]"
 )
 parser.add_argument(
     "--num_envs", type=int, default=1,
     help="Number of environments to spawn (policy will be applied to env 0 only)."
 )
+parser.add_argument("--video", action="store_true", default=False,
+                    help="Save a viewport MP4.")
+parser.add_argument("--video_length", type=int, default=2000,
+                    help="Number of physics steps to record.")
+
+
 def str2bool(v):
     """
     Accepts several spellings of a boolean value.
@@ -53,19 +59,40 @@ parser.add_argument(
 )
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
-
+if args_cli.video:
+    args_cli.enable_cameras = True
 # ─── launch Kit & IsaacLab ───
 app_launcher   = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 import torch
 import isaaclab.sim as sim_utils
 from isaaclab.scene import InteractiveScene
+from omni.kit.viewport.utility import get_active_viewport, capture_viewport_to_file  # :contentReference[oaicite:0]{index=0}
 
 from transfer.Model_based.Amber.rl_policy_wrapper import RLPolicy
 from transfer.Model_based.Amber.amber_cfg import NewRobotsSceneCfg
 from transfer.Model_based.Amber.amber_utils import run_simulator
 # from transfer.Model_based.Amber.amber_utils_policy import run_simulator
 # from transfer.Model_based.Amber.amber_utils_lip_at_policy_rate import run_simulator
+def _start_video_capture(filename: str, fps: float):
+    """
+    Begins recording the active viewport to <filename>.mp4  at <fps> frames/s.
+    """
+    import omni.kit.viewport.utility as vp
+    from omni.kit.capture import ImageCapture
+
+    vp.get_active_viewport().set_resolution_policy("RESIZE_FILL")
+    ImageCapture.start_capture(output_path=filename, framerate=int(round(fps)))
+
+def _stop_video_capture():
+    """Stops an ongoing ImageCapture session (if any)."""
+    from omni.kit.capture import ImageCapture
+
+    try:
+        ImageCapture.stop_capture()
+    except RuntimeError:
+        # already stopped / never started
+        pass
 
 def main():
     
@@ -77,7 +104,7 @@ def main():
         dt=0.005, render_interval=5, device=args_cli.device
     )
     sim   = sim_utils.SimulationContext(sim_cfg)
-    sim.set_camera_view([3.5, 0.0, 3.2], [0.0, 0.0, 0.5])
+    sim.set_camera_view([-9.5/2, 3.2/2, 1.3], [0.0, 0.0, 1])
 
     scene = InteractiveScene(NewRobotsSceneCfg(args_cli.num_envs, env_spacing=4.0))
     sim.reset(); scene.reset()
@@ -118,6 +145,14 @@ def main():
         out = policy.policy(dummy_obs)
     print("[DEBUG] policy(dummy_obs) →", out.detach().cpu().numpy().squeeze())
     # ─── run! ───
+    if args_cli.video:
+        vp = get_active_viewport()
+        if vp is None:
+            raise RuntimeError("Could not find an active viewport for recording!")
+        frame_dir = Path("videos/frames")
+        frame_dir.mkdir(parents=True, exist_ok=True)
+        max_frames = args_cli.video_length
+        print(f"[INFO] Capturing {max_frames} frames to '{frame_dir}'")
     run_simulator(sim, scene, policy, simulation_app, args_cli)
 
     simulation_app.close()

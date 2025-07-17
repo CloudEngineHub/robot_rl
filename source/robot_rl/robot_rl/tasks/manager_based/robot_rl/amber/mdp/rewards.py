@@ -1792,7 +1792,7 @@ def rcs_phase_reward_with_placement(
     fut_rel = desired_foot_targets_obs(
         env,
         Ts=Ts,
-        nom_height=1.36,      # ignored by this obs‐call (already baked in)
+        nom_height=0.8,      # ignored by this obs‐call (already baked in)
         wdes=0.0,            # ignore
         command_name=command_name,
         asset_cfg=asset_cfg,

@@ -5,9 +5,11 @@ from pxr import Gf, UsdGeom
 from isaaclab.utils.math import subtract_frame_transforms,euler_xyz_from_quat, wrap_to_pi, quat_rotate_inverse, yaw_quat, quat_rotate, quat_inv
 import omni.usd
 import math,time
+from omni.kit.viewport.utility import get_active_viewport, capture_viewport_to_file  # :contentReference[oaicite:0]{index=0}
+
 from source.robot_rl.robot_rl.tasks.manager_based.robot_rl.amber.amber_env_cfg import PERIOD,WDES
 from transfer.Model_based.Amber.amber_cfg import PERIOD, WDES
-PERIOD=1
+PERIOD=0.8
 Swing_ht=0.2
 import casadi as ca
 reference_step = ca.Function.load("transfer/Model_based/Amber/amber_reference_step.casadi")
@@ -270,6 +272,30 @@ def draw_step_and_com(
         UsdGeom.XformCommonAPI(com_sph).SetTranslate(
             Gf.Vec3d(*com_w[i].detach().cpu().tolist())
         )
+    B= amber.data.body_com_pos_w.shape[1]
+    # print("Bis ",B)
+    pos=amber.data.body_com_pos_w[:,[B-1, B-2],:]
+    left_pos = pos[:,1,:]  # white
+    for i in range(n_envs):
+        path = f"/World/debug/left_foot_sphere_{i}"
+        if not stage.GetPrimAtPath(path):
+            l_sph = UsdGeom.Sphere.Define(stage, path)
+            l_sph.GetRadiusAttr().Set(0.05)
+            l_sph.CreateDisplayColorAttr().Set([Gf.Vec3f(1.0, 1.0, 1.0)])
+        else:
+            l_sph = UsdGeom.Sphere(stage.GetPrimAtPath(path))
+        UsdGeom.XformCommonAPI(l_sph).SetTranslate(Gf.Vec3d(*left_pos[i].cpu().tolist()))
+
+    right_pos = pos[:, 0, :]    # black
+    for i in range(n_envs):
+        path = f"/World/debug/right_foot_sphere_{i}"
+        if not stage.GetPrimAtPath(path):
+            r_sph = UsdGeom.Sphere.Define(stage, path)
+            r_sph.GetRadiusAttr().Set(0.05)
+            r_sph.CreateDisplayColorAttr().Set([Gf.Vec3f(0.0, 0.0, 0.0)])
+        else:
+            r_sph = UsdGeom.Sphere(stage.GetPrimAtPath(path))
+        UsdGeom.XformCommonAPI(r_sph).SetTranslate(Gf.Vec3d(*right_pos[i].cpu().tolist()))
     # # -- torso COM spheres ----------------------------------------------------------
     # com_w_pos = amber.data.body_com_pos_w[:, 3, :]    # (n_envs,3)
     # for i in range(n_envs):
@@ -336,6 +362,8 @@ def draw_step_and_com(
     #         Gf.Vec3d(*rs_root_pos[i].detach().cpu().tolist())
     #     )
 
+## ____________ Original method_____________________________
+#  
 def compute_step_location_local(
     sim_time: float,
     scene,
@@ -390,6 +418,7 @@ def compute_step_location_local(
         math.sin(2*math.pi*tp) / math.sqrt(math.sin(2*math.pi*tp)**2 + Tswing),
         device=device
     )
+    print(f"time:{tp}; phi_c:{phi_c}")
     stance_idx  = int(0.5 - 0.5 * torch.sign(phi_c).item())
     stance_foot = foot_pos[:, stance_idx, :].clone()
     stance_foot[:, 2] = 0.0
@@ -418,13 +447,16 @@ def compute_step_location_local(
 
     # 9) clip in local
     p_local = icp_f.clone()
-    p_local[:, 0] = torch.clamp(icp_f[:, 0] - b[:, 0], -0.25, 0.25)
+    p_local[:, 0] = torch.clamp(icp_f[:, 0] - b[:, 0], -0.4, 0.4)
     p_local[:, 1] = torch.clamp(icp_f[:, 1] - b[:, 1], -0.3, 0.3)
 
     # 10) back to world, zero Z
+    
     p = to_global(p_local, amber.data.body_quat_w[:,3,:]) + r
     p[:, 2] = 0.0
-
+    # print(f"Local foot loc:{p_local}; global foot pos:{p}; diff:{p-p_local}")
+    
+    
     # --- OVERRIDE lateral step to your robot’s original Y ---
     swing_idx = 1 - stance_idx
     orig_y    = compute_step_location_local._orig_foot_y[:, swing_idx]
@@ -455,6 +487,28 @@ def compute_step_location_local(
                 com_sph = UsdGeom.Sphere(stage.GetPrimAtPath(path))
             UsdGeom.XformCommonAPI(com_sph).SetTranslate(Gf.Vec3d(*com[i].cpu().tolist()))
 
+        left_pos = pos[:, 1, :]  # yellow
+        for i in range(n_envs):
+            path = f"/World/debug/left_foot_sphere_{i}"
+            if not stage.GetPrimAtPath(path):
+                l_sph = UsdGeom.Sphere.Define(stage, path)
+                l_sph.GetRadiusAttr().Set(0.1)
+                l_sph.CreateDisplayColorAttr().Set([Gf.Vec3f(0.0, 1.0, 1.0)])
+            else:
+                l_sph = UsdGeom.Sphere(stage.GetPrimAtPath(path))
+            UsdGeom.XformCommonAPI(l_sph).SetTranslate(Gf.Vec3d(*left_pos[i].cpu().tolist()))
+
+        right_pos = pos[:, 0, :]    # green
+        for i in range(n_envs):
+            path = f"/World/debug/right_foot_sphere_{i}"
+            if not stage.GetPrimAtPath(path):
+                r_sph = UsdGeom.Sphere.Define(stage, path)
+                r_sph.GetRadiusAttr().Set(0.1)
+                r_sph.CreateDisplayColorAttr().Set([Gf.Vec3f(0.0, 1.0, 0.0)])
+            else:
+                r_sph = UsdGeom.Sphere(stage.GetPrimAtPath(path))
+            UsdGeom.XformCommonAPI(r_sph).SetTranslate(Gf.Vec3d(*right_pos[i].cpu().tolist()))
+
     # stash into scene for downstream use
     if not hasattr(scene, "current_des_step"):
         scene.current_des_step = torch.zeros((n_envs, 3), device=device)
@@ -462,6 +516,147 @@ def compute_step_location_local(
 
     return p
 
+##__ cosh sinh and velicity feedback
+
+# def compute_step_location_local(
+#     sim_time: float,
+#     scene,
+#     args_cli,
+#     nom_height: float,
+#     Tswing: float,
+#     wdes: float,
+#     visualize: bool = True
+# ) -> torch.Tensor:
+#     """
+#     Compute next foothold in world‐frame using a local‐frame LIP ICP method
+#     (now using full LIPM hyperbolic integration). Always recompute on each
+#     call (no half‐cycle guard). Returns [n_envs×3].
+#     """
+#     amber  = scene["Amber"]
+#     device = amber.data.default_root_state.device
+#     n_envs = args_cli.num_envs
+
+#     # --- static storage of original lateral foot‐Y offsets ---
+#     if not hasattr(compute_step_location_local, "_orig_foot_y"):
+#         pos0   = amber.data.body_pos_w               # (n_envs, n_bodies, 3)
+#         B      = pos0.shape[1]
+#         feet0  = pos0[:, [B-1, B-2], :]               # (n_envs, 2, 3)
+#         compute_step_location_local._orig_foot_y = feet0[:, :, 1].clone()
+
+#     # always do a fresh LIP‐ICP compute
+#     print("-"*108)
+#     print("_____ doing new lip compute:", sim_time, "; time:", time.time())
+#     print("-"*108)
+
+#     # 1) commanded velocity in local frame [N,2]
+#     cmd_np  = np.array(args_cli.desired_vel, dtype=np.float32)
+#     command = torch.from_numpy(cmd_np[:2]).to(device).unsqueeze(0).repeat(n_envs, 1)
+
+#     # 2) COM position in world from multiple body COMs [N,3]
+#     r = (13*amber.data.body_com_pos_w[:, 3, :]
+#          +3.4261*amber.data.body_com_pos_w[:, 4, :]
+#          +1.1526*amber.data.body_com_pos_w[:, 5, :]
+#          +3.4261*amber.data.body_com_pos_w[:, 6, :]
+#          +1.1526*amber.data.body_com_pos_w[:, 7, :]
+#     )/(13+2*3.4261+2*1.1526)
+
+#     # 3) natural frequency and exp term
+#     omega = math.sqrt(9.81 / nom_height)
+#     exp_omT = math.exp(omega * Tswing)
+
+#     # 4) last two foot positions [N,2,3]
+#     pos      = amber.data.body_pos_w
+#     B        = pos.shape[1]
+#     foot_pos = pos[:, [B-1, B-2], :]
+
+#     # 5) phase clock → stance foot
+#     tp    = (sim_time % (2*Tswing)) / (2*Tswing)
+#     phi_c = torch.tensor(
+#         math.sin(2*math.pi*tp) / math.sqrt(math.sin(2*math.pi*tp)**2 + Tswing),
+#         device=device
+#     )
+#     stance_idx  = int(0.5 - 0.5 * torch.sign(phi_c).item())
+#     stance_foot = foot_pos[:, stance_idx, :].clone()
+#     stance_foot[:, 2] = 0.0
+
+#     # 6) transforms
+#     def to_local(v, quat):
+#         return quat_rotate(yaw_quat(quat_inv(quat)), v)
+#     def to_global(v, quat):
+#         return quat_rotate(yaw_quat(quat), v)
+
+#     # 7) full LIPM hyperbolic integration for ICP in local frame
+#     com_local = to_local(r - stance_foot, amber.data.body_quat_w[:,3,:])
+#     x0 = com_local[:, 0]
+#     y0 = com_local[:, 1]
+#     vx0 = command[:, 0]
+#     vy0 = command[:, 1]
+#     # use math.cosh/sinh on float
+#     cosh_omT = math.cosh(omega * Tswing)
+#     sinh_omT = math.sinh(omega * Tswing)
+
+#     # integrate CoM state over Tswing
+#     x_f  = x0 * cosh_omT + (vx0 / omega) * sinh_omT
+#     vx_f = x0 * omega * sinh_omT + vx0 * cosh_omT
+#     y_f  = y0 * cosh_omT + (vy0 / omega) * sinh_omT
+#     vy_f = y0 * omega * sinh_omT + vy0 * cosh_omT
+
+#     # compute capture point at end of swing
+#     icp_f = torch.zeros((n_envs, 3), device=device)
+#     icp_f[:, 0] = x_f + vx_f / omega
+#     icp_f[:, 1] = y_f + vy_f / omega
+#     icp_f[:, 2] = 0.0
+
+#     # 8) compute bias b (reuse exp_omT)
+#     sd = torch.abs(command[:, 0]) * Tswing
+#     wd = wdes * torch.ones(n_envs, device=device)
+#     bx = sd / (exp_omT - 1.0)
+#     by = torch.sign(phi_c) * wd / (exp_omT + 1.0)
+#     b  = torch.stack((bx, by, torch.zeros_like(bx)), dim=1)
+
+#     # 9) clip in local
+#     p_local = icp_f.clone()
+#     p_local[:, 0] = torch.clamp(icp_f[:, 0] - b[:, 0], -0.4, 0.4)
+#     p_local[:, 1] = torch.clamp(icp_f[:, 1] - b[:, 1], -0.3, 0.3)
+
+#     # 10) back to world, zero Z
+#     p = to_global(p_local, amber.data.body_quat_w[:,3,:]) + r
+#     p[:, 2] = 0.0
+#     # print(f"Local foot loc:{p_local}; global foot pos:{p}; diff:{p-p_local}")
+
+#     # --- OVERRIDE lateral step to your robot’s original Y ---
+#     swing_idx = 1 - stance_idx
+#     orig_y    = compute_step_location_local._orig_foot_y[:, swing_idx]
+#     p[:, 1]   = orig_y
+
+#     # --- USD visualization (always show the stored target + COM) ---
+#     if visualize:
+#         stage = omni.usd.get_context().get_stage()
+#         for i in range(n_envs):
+#             path = f"/World/debug/future_step_{i}"
+#             if not stage.GetPrimAtPath(path):
+#                 sph = UsdGeom.Sphere.Define(stage, path)
+#                 sph.GetRadiusAttr().Set(0.02)
+#             else:
+#                 sph = UsdGeom.Sphere(stage.GetPrimAtPath(path))
+#             UsdGeom.XformCommonAPI(sph).SetTranslate(Gf.Vec3d(*p[i].cpu().tolist()))
+#         com = amber.data.body_pos_w[:, 3, :]
+#         for i in range(n_envs):
+#             path = f"/World/debug/com_sphere_{i}"
+#             if not stage.GetPrimAtPath(path):
+#                 com_sph = UsdGeom.Sphere.Define(stage, path)
+#                 com_sph.GetRadiusAttr().Set(0.1)
+#                 com_sph.CreateDisplayColorAttr().Set([Gf.Vec3f(1.0, 0.0, 0.0)])
+#             else:
+#                 com_sph = UsdGeom.Sphere(stage.GetPrimAtPath(path))
+#             UsdGeom.XformCommonAPI(com_sph).SetTranslate(Gf.Vec3d(*com[i].cpu().tolist()))
+
+#     # stash into scene for downstream use
+#     if not hasattr(scene, "current_des_step"):
+#         scene.current_des_step = torch.zeros((n_envs, 3), device=device)
+#     scene.current_des_step[:] = p
+
+#     return p
 
 
 
@@ -594,6 +789,8 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
     sim_dt   = sim.get_physics_dt()            # 0.005s → 200 Hz
     sim_time = 0.0
     count    = 0
+    video_active   = getattr(args_cli, "video", False)
+    video_max_step = getattr(args_cli, "video_length", 0)
     USE_CASADI_IK = args_cli.use_casadi_ik
     if USE_CASADI_IK:
         print("Using custom pin IK")
@@ -896,7 +1093,7 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                 com_y  = y_array[buffer_idx]
                 # com_z  = amber.data.body_com_pos_w.cpu().numpy()[0, 3, 2]   # NEW
                 com_z  = amber.data.body_pos_w.cpu().numpy()[0, 3, 2]   # NEW
-                com_z = 1.28
+                com_z = 1.29
                 # print(f"Qguess:{q_guess}")
                 # q_guess =ca.DM([0.0,0.0,0.0,0.0])
                 q1_lim = 70 * math.pi / 180      # ±70° → ±1.22173 rad
@@ -919,7 +1116,7 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                 if USE_CASADI_IK:
                     # IK solve (new signature: no z_swing, but needs com_z)
                     q_cas, _ = reference_step(
-                        phase, foot_w, com_x_curr, com_y, com_z, q_guess
+                        phase, foot_w, com_x, com_y, com_z, q_guess
                     )
                     q_guess = q_cas
                     q_vals   = np.array(q_cas).astype(float).flatten()   # already in rad
@@ -961,7 +1158,7 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                 foot_r_init_curr = pos_world_1[B-1].copy()
                 if debug:
                     #       ------------------------------------------------------------------------
-                    print(f"COM USING INTERPOLATION||x:{com_x}; y:{com_y}; z_com:{com_z}||; |IK angles:{q_cas*180/math.pi}|")
+                    print(f"COM USING INTERPOLATION||x:{com_x}; y:{com_y}; z_com:{amber.data.body_pos_w.cpu().numpy()[0, 3, 2]}||; |IK angles:{q_cas*180/math.pi}|")
                     print(f"CURRENT COM POSITIONS :||x:{com_x_curr:.4f}; y:{com_y_curr:.4f}; z_com:{com_z}||; ")
 
                     print(f"footpos for IK:|{foot_w}|")
@@ -1060,8 +1257,21 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
             # ───────────────────────── Physics step ────────────────────────────────
             sim.step()
             scene.update(sim_dt)
+            if getattr(args_cli, "video", False):
+                max_frames = args_cli.video_length
+                vp = get_active_viewport()
+                if vp is None:
+                    raise RuntimeError("Could not find an active viewport for recording!")
+                frame_dir = Path("videos/frames")
+                frame_dir.mkdir(parents=True, exist_ok=True)
+                if count < max_frames:
+                    # write a png for this physics step
+                    capture_viewport_to_file(vp, str(frame_dir / f"frame_{count:06d}.png"))
+                elif count == max_frames:
+                    print("[INFO] Reached --video_length; stopping frame capture.")
             sim_time += sim_dt
             count   += 1
+            
     except KeyboardInterrupt:
         print("\n[INFO] Ctrl-C – CSV saved at:", csv_path)
     finally:

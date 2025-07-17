@@ -772,7 +772,7 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                     wdes=       WDES,
                     visualize=  False
                 )
-                # print("-----------------------------",next_foot,"-----------")
+                print("-----------------------------",next_foot,"-----------")
                 new_half_cycle = (buffer_idx >= N)
 
                 # ---------------------------------------------------------------
