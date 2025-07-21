@@ -128,6 +128,20 @@ class AmberRewardCfg(RewardsCfg):
     # big penalty on fall (pelvis contact)
     termination_penalty = RewTerm(func=mdp.is_terminated, weight=-400.0)
 
+
+    ## Functions for plotting rewards:
+    curr_vel = RewTerm(
+        func=mdp.curr_vel_fn,
+        weight=1,
+        params={"command_name": "base_velocity",
+                        "std": 0.4,      },      # required parameter},
+    )
+    cmd_vel_given = RewTerm(
+        func=mdp.cmd_vel_fn,
+        weight=1,
+        params={"command_name": "base_velocity",
+                        "std": 0.4,      },      # required parameter},
+    )
     # track forward velocity (x) – using the base class's XY function is fine since y is always zero
     track_lin_vel_xy = RewTerm(
         func=mdp.track_lin_vel_x_amber,

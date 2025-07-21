@@ -26,7 +26,9 @@ from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
     EventCfg,
 )
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-
+Nom_ht= 0.77
+half_cycle= True
+visualise_flag= True
 ##
 # Pre-defined configs
 ##
@@ -40,12 +42,13 @@ class AmberRoughLipObsCfg(AmberObservationsCfg):
             scale   = 1.0,
             params  = {
                 "Ts":           PERIOD/2.0,
-                "nom_height":   0.8,
+                "nom_height":   Nom_ht,
                 "wdes":         0,
                 "command_name": "base_velocity",
                 "asset_cfg":    SceneEntityCfg("robot",body_names=["left_shin","right_shin"],),
                 "debug":        False,
-                "visualize":    False
+                "visualize":    False,
+                "half_cycle":   half_cycle,
             },
         )
         # current_feet = ObsTerm(
@@ -64,12 +67,13 @@ class AmberRoughLipObsCfg(AmberObservationsCfg):
             scale   = 1.0,
             params  = {
                 "Ts":           PERIOD/2.0,
-                "nom_height":   0.8,
+                "nom_height":   Nom_ht,
                 "wdes":         0,
                 "command_name": "base_velocity",
                 "asset_cfg":    SceneEntityCfg("robot",body_names=["left_shin","right_shin"],),
                 "debug":        False,
-                "visualize":False
+                "visualize":False,
+                "half_cycle":   half_cycle,
             },
         )
         # current_feet = ObsTerm(
@@ -107,7 +111,7 @@ class AmberRoughLipRewards(AmberRewardCfg):
     # )
     rcs_phase_with_place = RewTerm(
         func=mdp.rcs_phase_reward_with_placement,
-        weight=40.0,
+        weight=90.0,
         params={
             "Ts":                PERIOD/2,
             "left_sensor_name":  "contact_forces_left",
@@ -116,7 +120,8 @@ class AmberRoughLipRewards(AmberRewardCfg):
             "sigma":             0.05,
             "asset_cfg":         SceneEntityCfg("robot",body_names=["left_shin","right_shin"],),
             "debug":             False,
-            "visualise":         False, 
+            "visualise":         visualise_flag,
+            "half_cycle":   half_cycle,
         },
     )
     # future_feet = RewTerm(
@@ -194,7 +199,7 @@ class AmberRoughLipEventsCfg(AmberEventsCfg):
 class AmberRoughLipEnvCfg(AmberRoughEnvCfg):
     """Configuration for the Amber Flat environment."""
     # events: AmberRoughLipEventsCfg = AmberRoughLipEventsCfg()
-    # observations: AmberRoughLipObsCfg = AmberRoughLipObsCfg()
+    observations: AmberRoughLipObsCfg = AmberRoughLipObsCfg()
     rewards : AmberRoughLipRewards = AmberRoughLipRewards()
     def __post_init__(self):
         # post init of parent

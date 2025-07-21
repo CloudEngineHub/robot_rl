@@ -3,11 +3,12 @@ import glob
 import imageio
 import shutil
 from pathlib import Path
+from datetime import datetime
 
 def frames_to_video(
     frames_dir: str = "videos/frames",
     output_dir: str = "transfer/videos",
-    output_name: str = "run_video.mp4",
+    output_name: str = None,
     fps: int = 200
 ):
     """
@@ -16,6 +17,10 @@ def frames_to_video(
     writes the video to `output_dir/output_name`,
     and then deletes the source frames.
     """
+    # decide on output filename if not given
+    if output_name is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_name = f"run_video_{timestamp}.mp4"
     frames_dir = Path(frames_dir)
     output_dir = Path(output_dir)
     output_path = output_dir / output_name

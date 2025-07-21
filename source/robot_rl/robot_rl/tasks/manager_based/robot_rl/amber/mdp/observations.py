@@ -205,12 +205,13 @@ def debug_plot_and_print(
 def desired_foot_targets_obs(
     env: ManagerBasedRLEnv,
     Ts: float                    = 0.4,                   # half‐cycle duration
-    nom_height: float            = 0.45,                  # pendulum height
+    nom_height: float            = 0.8,                  # pendulum height
     wdes: float                  = 0.1,                   # desired half‐width
     command_name: str            = "base_velocity",
     asset_cfg: SceneEntityCfg    = SceneEntityCfg("robot"),
     debug: bool                  = False,
     visualize: bool              = False,
+    half_cycle: bool             = True,
 ) -> torch.Tensor:
     """
     Returns [N,6] = [Lx,Ly,Lz,  Rx,Ry,Rz]:
@@ -249,7 +250,25 @@ def desired_foot_targets_obs(
     changed_mask = sign_tensor != prev_sign
 
     # 2) update only on half‐cycle flips
-    if changed_mask.any():
+    if half_cycle== True :
+        if changed_mask.any():
+            swing = 1 if sign_now > 0 else 0
+            new_steps = compute_step_location_local(
+                sim_time   = t,
+                scene      = env.scene,
+                num_envs   = env.num_envs,
+                desired_vel= env.command_manager.get_command("base_velocity")[0].cpu().tolist(),
+                nom_height = nom_height,
+                Tswing     = Ts,
+                wdes       = wdes,
+                visualize  = False,
+            ) # [N,3]
+            #for half cycle
+            targets[changed_mask, swing, :] = new_steps[changed_mask]
+            #for continious
+            # targets[:, swing, :] = new_steps
+            prev_sign.copy_(sign_tensor)
+    else:
         swing = 1 if sign_now > 0 else 0
         new_steps = compute_step_location_local(
             sim_time   = t,
@@ -262,11 +281,10 @@ def desired_foot_targets_obs(
             visualize  = False,
         ) # [N,3]
         #for half cycle
-        targets[changed_mask, swing, :] = new_steps[changed_mask]
+        # targets[changed_mask, swing, :] = new_steps[changed_mask]
         #for continious
-        # targets[:, swing, :] = new_steps
+        targets[:, swing, :] = new_steps
         prev_sign.copy_(sign_tensor)
-
     # 3) debug print
     if debug and N > 0:
         # COM
@@ -329,6 +347,7 @@ def desired_foot_targets_obs(
         #     UsdGeom.XformCommonAPI(sph).SetTranslate(Gf.Vec3d(*last_R[i].cpu().tolist()))
 
         # 3) Future left & right foot targets
+
         for i in range(N):
             # future left foot (magenta)
             fl_path = f"/World/debug/future_left_foot_{i}"
@@ -349,7 +368,7 @@ def desired_foot_targets_obs(
             else:
                 sph = UsdGeom.Sphere(stage.GetPrimAtPath(fr_path))
             UsdGeom.XformCommonAPI(sph).SetTranslate(Gf.Vec3d(*targets[i, 1, :].cpu().tolist()))
-        
+
     # 5) flatten and return
     # print(targets.reshape(N, 6))
     curr_pos = amber.data.body_pos_w[:, asset_cfg.body_ids, :]  # [N,2,3]

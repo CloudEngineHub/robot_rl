@@ -59,15 +59,16 @@ parser.add_argument(
 )
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
-if args_cli.video:
-    args_cli.enable_cameras = True
+
 # ─── launch Kit & IsaacLab ───
 app_launcher   = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 import torch
 import isaaclab.sim as sim_utils
 from isaaclab.scene import InteractiveScene
-from omni.kit.viewport.utility import get_active_viewport, capture_viewport_to_file  # :contentReference[oaicite:0]{index=0}
+if args_cli.video:
+    args_cli.enable_cameras = True
+    from omni.kit.viewport.utility import get_active_viewport, capture_viewport_to_file  # :contentReference[oaicite:0]{index=0}
 
 from transfer.Model_based.Amber.rl_policy_wrapper import RLPolicy
 from transfer.Model_based.Amber.amber_cfg import NewRobotsSceneCfg
@@ -104,7 +105,7 @@ def main():
         dt=0.005, render_interval=5, device=args_cli.device
     )
     sim   = sim_utils.SimulationContext(sim_cfg)
-    sim.set_camera_view([-9.5/2, 3.2/2, 1.3], [0.0, 0.0, 1])
+    sim.set_camera_view([-9.5/3, 3.2/3, 1.3], [0.0, 0.0, 1])
 
     scene = InteractiveScene(NewRobotsSceneCfg(args_cli.num_envs, env_spacing=4.0))
     sim.reset(); scene.reset()

@@ -160,7 +160,7 @@ class AmberRoughEnvCfg(AmberEnvCfg):
        # big penalty on fall (torso contact)
         self.rewards.termination_penalty.weight           = -200.0  
         # reward forward x‐velocity tracking
-        self.rewards.track_lin_vel_xy.weight              =  20#80.0  
+        self.rewards.track_lin_vel_xy.weight              =  0#20#80.0  
         # penalize asymmetric joints per cycle
         self.rewards.joint_symmetry_reward.weight        =  0#2#
         # self.rewards.joint_symmetry_reward.params["diff_threshold"] = 5

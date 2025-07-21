@@ -5,7 +5,6 @@ from pxr import Gf, UsdGeom
 from isaaclab.utils.math import subtract_frame_transforms,euler_xyz_from_quat, wrap_to_pi, quat_rotate_inverse, yaw_quat, quat_rotate, quat_inv
 import omni.usd
 import math,time
-from omni.kit.viewport.utility import get_active_viewport, capture_viewport_to_file  # :contentReference[oaicite:0]{index=0}
 
 from source.robot_rl.robot_rl.tasks.manager_based.robot_rl.amber.amber_env_cfg import PERIOD,WDES
 from transfer.Model_based.Amber.amber_cfg import PERIOD, WDES
@@ -363,7 +362,7 @@ def draw_step_and_com(
     #     )
 
 ## ____________ Original method_____________________________
-#  
+ 
 def compute_step_location_local(
     sim_time: float,
     scene,
@@ -418,7 +417,7 @@ def compute_step_location_local(
         math.sin(2*math.pi*tp) / math.sqrt(math.sin(2*math.pi*tp)**2 + Tswing),
         device=device
     )
-    print(f"time:{tp}; phi_c:{phi_c}")
+    # print(f"time:{tp}; phi_c:{phi_c}")
     stance_idx  = int(0.5 - 0.5 * torch.sign(phi_c).item())
     stance_foot = foot_pos[:, stance_idx, :].clone()
     stance_foot[:, 2] = 0.0
@@ -791,7 +790,14 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
     count    = 0
     video_active   = getattr(args_cli, "video", False)
     video_max_step = getattr(args_cli, "video_length", 0)
+    act_q1_left = None
+    act_q2_left = None
+    act_q1_right = None
+    act_q2_right = None
     USE_CASADI_IK = args_cli.use_casadi_ik
+    if args_cli.video:
+        from omni.kit.viewport.utility import get_active_viewport, capture_viewport_to_file  # :contentReference[oaicite:0]{index=0}
+
     if USE_CASADI_IK:
         print("Using custom pin IK")
     amber    = scene["Amber"]
@@ -1009,10 +1015,10 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                     """scalar or DM → scalar/DM (0≤tau≤1)"""
                     tau = ca.fmax(0, ca.fmin(1, tau))
                     return z0 + (z1 - z0) * (tau**3 + 3 * tau**2 * (1 - tau))
-                stance_z = -0.04
+                stance_z = -0.05
                 mask   = phase_np <= 0.5
                 z0_arr = cubic_bezier_interpolation(foot_z,        Swing_ht, 2 * phase)
-                z1_arr = cubic_bezier_interpolation(Swing_ht, 0.0,        2 * phase - 1)
+                z1_arr = cubic_bezier_interpolation(Swing_ht, stance_z,        2 * phase - 1)
                 z_array = ca.if_else(mask, z0_arr, z1_arr)       # DM(N,1)
                 # z0_arr_s = cubic_bezier_interpolation(foot_z_stance, stance_z, 2 * phase)
                 # z1_arr_s = cubic_bezier_interpolation(stance_z, stance_z, 2 * phase - 1)
@@ -1160,7 +1166,10 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                     #       ------------------------------------------------------------------------
                     print(f"COM USING INTERPOLATION||x:{com_x}; y:{com_y}; z_com:{amber.data.body_pos_w.cpu().numpy()[0, 3, 2]}||; |IK angles:{q_cas*180/math.pi}|")
                     print(f"CURRENT COM POSITIONS :||x:{com_x_curr:.4f}; y:{com_y_curr:.4f}; z_com:{com_z}||; ")
-
+                    # print((13*amber.data.body_com_pos_w[:, 3, :]+3.4261*amber.data.body_com_pos_w[:, 4, :]
+                    #     +1.1526*amber.data.body_com_pos_w[:, 5, :]+3.4261*amber.data.body_com_pos_w[:, 6, :]
+                    #     +1.1526*amber.data.body_com_pos_w[:, 7, :] )/(13+2*3.4261+2*1.1526
+                    # ))
                     print(f"footpos for IK:|{foot_w}|")
                     print(f"------------------------------Curr left foot:|{foot_l_init_curr}|; right foot:|{foot_r_init_curr}|")
                     # print(f"Body com:{amber.data.root_com_pos_w.cpu().numpy()[0] }")
@@ -1183,8 +1192,8 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                     joint_targets[0, names.index(jn)] = q_vals[i]
 
                 amber.set_joint_position_target(torch.from_numpy(joint_targets).to(device))
-                # print("time for IK sovle:",time.time()-t_buff_start)
-                # print(f"IK for {buffer_idx}/{N}")
+                print("time for IK sovle:",time.time()-t_buff_start)
+                print(f"IK for {buffer_idx}/{N}")
                 draw_step_and_com(scene, next_foot)
                 draw_foot_trajectory(scene, foot_w_stack)
 
@@ -1201,7 +1210,9 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                 # 1) current joint positions
                 cur_q_row = cur_q[env_id].tolist()
                 # 2) commanded targets
-                act_row = action_isaac.tolist()
+                # act_row = action_isaac.tolist()
+                act_row = [float(q_vals[i]) for i in range(4)]
+
                 # 3) foot positions: last two bodies are [B-2]=left, [B-1]=right
                 bodies = amber.data.body_pos_w.cpu().numpy()
                 foot_l = bodies[env_id, -2, :].tolist()
@@ -1257,6 +1268,8 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
             # ───────────────────────── Physics step ────────────────────────────────
             sim.step()
             scene.update(sim_dt)
+            # ───────────────────────── Video frames ────────────────────────────────
+
             if getattr(args_cli, "video", False):
                 max_frames = args_cli.video_length
                 vp = get_active_viewport()

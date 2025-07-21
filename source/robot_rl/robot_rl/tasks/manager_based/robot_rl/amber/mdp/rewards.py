@@ -1658,7 +1658,81 @@ def continuous_contact_penalty(
     penalty = torch.clamp(penalty, 0, 50)
     return penalty
 
+def curr_vel_fn(
+    env: ManagerBasedRLEnv,
+    std: float,
+    command_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    window_size: int = 10,        # low-pass filter window
+) -> torch.Tensor:
+    """Reward tracking of linear velocity commands (xy axes) using exponential kernel,
+       with a simple moving-average low-pass filter on the measured velocity."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    device = env.device
+    N = env.num_envs
 
+    # 1) pull the raw measured velocity for the base link in world frame
+    raw_act = asset.data.body_link_lin_vel_w[:, 3, :2]  # [N,2]
+
+    # 2) setup persistent ring buffer for low-pass
+    if not hasattr(track_lin_vel_x_amber, "_vel_buf"):
+        # buffer shape: [window, N, 2]
+        track_lin_vel_x_amber._vel_buf = torch.zeros(window_size, N, 2, device=device)
+        track_lin_vel_x_amber._buf_ptr = 0
+
+    buf = track_lin_vel_x_amber._vel_buf
+    ptr = track_lin_vel_x_amber._buf_ptr
+
+    # insert the newest measurement
+    buf[ptr] = raw_act
+    ptr = (ptr + 1) % window_size
+    track_lin_vel_x_amber._buf_ptr = ptr
+
+    # compute the filtered velocity as the window-average
+    filt_act = buf.mean(dim=0)  # [N,2]
+    
+    # 3) now compute the command vs. filtered actual error
+    # cmd = env.command_manager.get_command(command_name)[:, :2]  # [N,2]
+    # lin_vel_error = torch.sum((cmd - filt_act)**2, dim=1)       # [N]
+    
+    return filt_act[:,0]
+
+
+def cmd_vel_fn(
+    env: ManagerBasedRLEnv,
+    std: float,
+    command_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    window_size: int = 10,        # low-pass filter window
+) -> torch.Tensor:
+    """Reward tracking of linear velocity commands (xy axes) using exponential kernel,
+       with a simple moving-average low-pass filter on the measured velocity."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    device = env.device
+    N = env.num_envs
+
+    # 1) pull the raw measured velocity for the base link in world frame
+    raw_act = asset.data.body_link_lin_vel_w[:, 3, :2]  # [N,2]
+
+    # 2) setup persistent ring buffer for low-pass
+    if not hasattr(track_lin_vel_x_amber, "_vel_buf"):
+        # buffer shape: [window, N, 2]
+        track_lin_vel_x_amber._vel_buf = torch.zeros(window_size, N, 2, device=device)
+        track_lin_vel_x_amber._buf_ptr = 0
+
+    buf = track_lin_vel_x_amber._vel_buf
+    ptr = track_lin_vel_x_amber._buf_ptr
+
+    # insert the newest measurement
+    buf[ptr] = raw_act
+    ptr = (ptr + 1) % window_size
+    track_lin_vel_x_amber._buf_ptr = ptr
+
+    # 3) now compute the command vs. filtered actual error
+    cmd = env.command_manager.get_command(command_name)[:, :2]  # [N,2]
+    # lin_vel_error = torch.sum((cmd - filt_act)**2, dim=1)       # [N]
+
+    return cmd[:,0]
 
 def track_lin_vel_x_amber(
     env: ManagerBasedRLEnv,
@@ -1762,6 +1836,7 @@ def rcs_phase_reward_with_placement(
     asset_cfg: SceneEntityCfg   = SceneEntityCfg("robot"),
     debug: bool                 = False,
     visualise: bool             = False,
+    half_cycle: bool            = True,
 ) -> torch.Tensor:
     """
     Uses the *relative* 4-d ObsTerm [ΔLx,ΔLz,ΔRx,ΔRz] from
@@ -1792,12 +1867,13 @@ def rcs_phase_reward_with_placement(
     fut_rel = desired_foot_targets_obs(
         env,
         Ts=Ts,
-        nom_height=0.8,      # ignored by this obs‐call (already baked in)
+        nom_height=0.77,      # ignored by this obs‐call (already baked in)
         wdes=0.0,            # ignore
         command_name=command_name,
         asset_cfg=asset_cfg,
         debug=False,
         visualize=visualise,
+        half_cycle=half_cycle,
     )  # [N,4]
 
     # 4) split into left vs right rel-vectors
