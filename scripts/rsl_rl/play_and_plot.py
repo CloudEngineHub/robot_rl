@@ -98,18 +98,43 @@ def main():
     rew_mgr  = base_env.reward_manager                 # new: access reward manager
 
     # run the manager once to get the dict   {name: tensor}
-    obs_dict = obs_mgr.compute()            # shapes:  [N, dim_i]
+    # obs_dict = obs_mgr.compute()            # shapes:  [N, dim_i]
 
+
+    # convert to single‑agent (if needed)
+    if isinstance(env.unwrapped, DirectMARLEnv):
+        env = multi_agent_to_single_agent(env)
+
+    # now fetch the *final* observation manager
+    obs_mgr  = env.unwrapped.observation_manager
+    obs_dict = obs_mgr.compute()
     print("=== Observation slice map ===")
     slice_map = {}
+    obs_columns = []
     start = 0
     for name, tensor in obs_dict.items():   # preserves cfg order
         dim = tensor.shape[1] if tensor.ndim > 1 else 1
         sl  = slice(start, start + dim)
         slice_map[name] = sl
+        width = dim
+        if width == 1:
+            obs_columns.append(name)
+        else:
+            obs_columns += [f"{name}[{i}]" for i in range(width)]
         print(f"{name:25s} -> {sl}")
         start += dim
     print("Vector length:", start)
+    # Build a flat list of column names for every element of every observation
+    obs_columns = []
+    for name, sl in slice_map.items():
+        width = sl.stop - sl.start
+        print("+------------WIDTH:",width)
+        if width == 1:
+            obs_columns.append(name)                      # e.g. "projected_gravity"
+        else:
+            # tag individual components: "joint_pos[0]", "joint_pos[1]", …
+            obs_columns += [f"{name}[{i}]" for i in range(width)]
+    # ------------------------------------------------------------
     # convert to single-agent instance if required by the RL algorithm
     if isinstance(env.unwrapped, DirectMARLEnv):
         env = multi_agent_to_single_agent(env)
@@ -157,10 +182,29 @@ def main():
     print("-"*20,dt,"-"*20)
     # run the manager once to get the dict {name: tensor}
     term_names = rew_mgr.active_terms          # <-- names once, after env is ready
+    run_stamp = os.path.basename(os.path.dirname(resume_path))          # 2025‑07‑17_10‑20‑13
+    ckpt_id   = os.path.basename(resume_path).replace("model_", "").replace(".pt", "")  # 13999
+    csv_name  = f"{run_stamp}_{ckpt_id}.csv"                            # 2025‑07‑17_10‑20‑13_13999.csv
 
-    csv_file = open("reward_terms.csv", "w", newline="")
-    writer   = csv.DictWriter(csv_file, fieldnames=["step"] + rew_mgr.active_terms)
+    # 2) Define the results directory *explicitly*
+    results_dir = "/home/s-ritwik/src/robot_rl/SURF_results"
+
+    # 3) Make sure the directory exists
+    os.makedirs(results_dir, exist_ok=True)
+
+    # 4) Final path for the CSV
+    csv_path = os.path.join(results_dir, csv_name)
+    # ------------------------------------------------------------
+
+    # open the file for writing rewards
+    fieldnames = ["step"] + rew_mgr.active_terms + obs_columns
+
+    csv_file = open(csv_path, "w", newline="")
+    writer   = csv.DictWriter(csv_file, fieldnames=fieldnames)
     writer.writeheader()
+    # csv_file = open("reward_terms.csv", "w", newline="")
+    # writer   = csv.DictWriter(csv_file, fieldnames=["step"] + rew_mgr.active_terms)
+    # writer.writeheader()
     timestep = 0
     step = 0
     # reset environment
@@ -178,13 +222,25 @@ def main():
         # print(obs) 
         # for name, sl in slice_map.items():
         #     print(name, obs[:, sl])             # per-env values for that term
+
         # --- reward logging ---
         rew_mgr.compute(dt)                       # updates _step_reward
         vals = rew_mgr._step_reward.mean(0)       # [num_terms]
+        # --- observation logging ---
+        obs_mean = obs.mean(0)                       # mean over envs, [obs_dim]
 
         row = {"step": step}
+        #REWARDS
         for name, v in zip(rew_mgr.active_terms, vals):
             row[name] = float(v.item())
+        #OBSERVATION    
+        for name, sl in slice_map.items():
+            vec = obs_mean[sl]                      # tensor view, may be 0‑D or 1‑D
+            if vec.numel() == 1:                    # scalar
+                row[name] = float(vec.item())
+            else:                                   # vector → expand components
+                for i, val in enumerate(vec):
+                    row[f"{name}[{i}]"] = float(val.item())
         writer.writerow(row)
 
         step += 1

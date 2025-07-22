@@ -2206,3 +2206,131 @@ def compute_step_location_local_amber(
     return p
 
 
+## plotting rewards
+
+@torch.no_grad()
+def left_foot_target_reward(
+    env: ManagerBasedRLEnv,
+    Ts: float                  = 0.4,
+    nom_height: float          = 0.45,
+    wdes: float                = 0.1,
+    command_name: str          = "base_velocity",
+    asset_cfg: SceneEntityCfg  = SceneEntityCfg("robot", body_names=["left_shin","right_shin"]),
+    debug: bool                = False,
+    visualize: bool            = False,
+    half_cycle: bool           = True,
+) -> torch.Tensor:
+    """
+    Reward = ΔLx, the desired‐minus‐current left‐foot X offset from
+    desired_foot_targets_obs (which returns [ΔLx,ΔLz,ΔRx,ΔRz]).
+    """
+    # [N,4] = [ΔLx,ΔLz,ΔRx,ΔRz]
+    fut_rel = desired_foot_targets_obs(
+        env,
+        Ts=Ts,
+        nom_height=nom_height,
+        wdes=wdes,
+        command_name=command_name,
+        asset_cfg=asset_cfg,
+        debug=debug,
+        visualize=visualize,
+        half_cycle=half_cycle,
+    )
+    # take only the left‐foot X component
+    left_x = fut_rel[:, 0]  # shape [N]
+    return left_x
+
+@torch.no_grad()
+def right_foot_target_reward(
+    env: ManagerBasedRLEnv,
+    Ts: float                  = 0.4,
+    nom_height: float          = 0.45,
+    wdes: float                = 0.1,
+    command_name: str          = "base_velocity",
+    asset_cfg: SceneEntityCfg  = SceneEntityCfg("robot", body_names=["left_shin","right_shin"]),
+    debug: bool                = False,
+    visualize: bool            = False,
+    half_cycle: bool           = True,
+) -> torch.Tensor:
+    """
+    Reward = ΔLx, the desired‐minus‐current left‐foot X offset from
+    desired_foot_targets_obs (which returns [ΔLx,ΔLz,ΔRx,ΔRz]).
+    """
+    # [N,4] = [ΔLx,ΔLz,ΔRx,ΔRz]
+    fut_rel = desired_foot_targets_obs(
+        env,
+        Ts=Ts,
+        nom_height=nom_height,
+        wdes=wdes,
+        command_name=command_name,
+        asset_cfg=asset_cfg,
+        debug=debug,
+        visualize=visualize,
+        half_cycle=half_cycle,
+    )
+    # take only the left‐foot X component
+    right_x = fut_rel[:, 2]  # shape [N]
+    return right_x
+
+@torch.no_grad()
+def current_left_foot_x(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["left_shin","right_shin"]),
+) -> torch.Tensor:
+    """
+    Returns the current world-frame X position of the left shin link.
+    """
+    amber = env.scene[asset_cfg.name]
+    left_id, _ = asset_cfg.body_ids
+    pos0       = amber.data.body_pos_w          # [N, bodies, 3]
+    B          = pos0.shape[1]
+    # body_pos_w: [N, bodies, 3]
+    return amber.data.body_pos_w[:, B-2, 0]  # [N,2,3]
+
+
+@torch.no_grad()
+def current_left_foot_z(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["left_shin","right_shin"]),
+) -> torch.Tensor:
+    """
+    Returns the current world-frame X position of the left shin link.
+    """
+    amber = env.scene[asset_cfg.name]
+    left_id, _ = asset_cfg.body_ids
+    pos0       = amber.data.body_pos_w          # [N, bodies, 3]
+    B          = pos0.shape[1]
+    # body_pos_w: [N, bodies, 3]
+    return amber.data.body_pos_w[:, B-2, 2]  # [N,2,3]
+
+
+@torch.no_grad()
+def current_right_foot_z(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["left_shin","right_shin"]),
+) -> torch.Tensor:
+    """
+    Returns the current world-frame X position of the left shin link.
+    """
+    amber = env.scene[asset_cfg.name]
+    left_id, _ = asset_cfg.body_ids
+    pos0       = amber.data.body_pos_w          # [N, bodies, 3]
+    B          = pos0.shape[1]
+    # body_pos_w: [N, bodies, 3]
+    return amber.data.body_pos_w[:, B-1, 2]  # [N,2,3]
+
+
+@torch.no_grad()
+def current_right_foot_x(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["left_shin","right_shin"]),
+) -> torch.Tensor:
+    """
+    Returns the current world-frame X position of the right shin link.
+    """
+    amber = env.scene[asset_cfg.name]
+    left_id, _ = asset_cfg.body_ids
+    pos0       = amber.data.body_pos_w          # [N, bodies, 3]
+    B          = pos0.shape[1]
+    # body_pos_w: [N, bodies, 3]
+    return amber.data.body_pos_w[:, B-1, 0]  # [N,2,3]

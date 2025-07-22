@@ -371,12 +371,15 @@ def desired_foot_targets_obs(
 
     # 5) flatten and return
     # print(targets.reshape(N, 6))
-    curr_pos = amber.data.body_pos_w[:, asset_cfg.body_ids, :]  # [N,2,3]
+    pos0       = amber.data.body_pos_w          # [N, bodies, 3]
+    B          = pos0.shape[1]
+    curr_pos = amber.data.body_pos_w[:, [B-2,B-1], :]  # [N,2,3]
 
     # relative = desired_world − current_world
     rel_targets = targets - curr_pos                            # [N,2,3]
     rel_xz      = rel_targets[:, :, [0, 2]]                           # [N,2,2]
-    # print(rel_xz)
+    # print(f"right target:{targets[:,1].cpu().tolist()} left target:{targets[:,0].cpu().tolist()}")
+    # print(f"right pos   :{curr_pos[:,1].cpu().tolist()} left pos   :{curr_pos[:,0].cpu().tolist()}")
     # reshape to [N,4] in order [ΔLx, ΔLz, ΔRx, ΔRz]
     return rel_xz.view(N, 4)
 

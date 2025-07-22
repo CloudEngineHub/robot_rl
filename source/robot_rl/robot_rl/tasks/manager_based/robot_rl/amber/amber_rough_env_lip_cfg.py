@@ -28,7 +28,7 @@ from isaaclab_tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 Nom_ht= 0.77
 half_cycle= True
-visualise_flag= True
+visualise_flag= False
 ##
 # Pre-defined configs
 ##
@@ -51,6 +51,7 @@ class AmberRoughLipObsCfg(AmberObservationsCfg):
                 "half_cycle":   half_cycle,
             },
         )
+    
         # current_feet = ObsTerm(
         #     func           = mdp.current_foot_positions,
         #     history_length = 1,
@@ -111,7 +112,7 @@ class AmberRoughLipRewards(AmberRewardCfg):
     # )
     rcs_phase_with_place = RewTerm(
         func=mdp.rcs_phase_reward_with_placement,
-        weight=90.0,
+        weight=40.0,
         params={
             "Ts":                PERIOD/2,
             "left_sensor_name":  "contact_forces_left",
@@ -123,6 +124,64 @@ class AmberRoughLipRewards(AmberRewardCfg):
             "visualise":         visualise_flag,
             "half_cycle":   half_cycle,
         },
+    )
+
+    #PLOTTING REWARDS
+    left_target = RewTerm(
+        func    = mdp.left_foot_target_reward,
+        weight  = 1e-10,           # tune as you like
+        params  = {
+            "Ts":            PERIOD/2.0,
+            "nom_height":    1.36,
+            "wdes":          0.0,
+            "command_name":  "base_velocity",
+            "asset_cfg":     SceneEntityCfg("robot", body_names=["left_shin","right_shin"]),
+            "debug":         False,
+            "visualize":     False,  # or True if you want spheres
+            "half_cycle":    half_cycle,
+        },
+    )
+    right_target = RewTerm(
+        func    = mdp.right_foot_target_reward,
+        weight  = 1e-10,           # tune as you like
+        params  = {
+            "Ts":            PERIOD/2.0,
+            "nom_height":    1.36,
+            "wdes":          0.0,
+            "command_name":  "base_velocity",
+            "asset_cfg":     SceneEntityCfg("robot", body_names=["left_shin","right_shin"]),
+            "debug":         False,
+            "visualize":     False,  # or True if you want spheres
+            "half_cycle":    half_cycle,
+        },
+    )
+    curr_x_L = RewTerm(
+        func   = mdp.current_left_foot_x,
+        weight  = 1e-10,  # or however you want to normalize
+        params = {
+            "asset_cfg": SceneEntityCfg("robot", body_names=["left_shin","right_shin"])
+        }
+    )
+    curr_z_L = RewTerm(
+        func   = mdp.current_left_foot_z,
+        weight  = 1e-10,  # or however you want to normalize
+        params = {
+            "asset_cfg": SceneEntityCfg("robot", body_names=["left_shin","right_shin"])
+        }
+    )
+    curr_z_R = RewTerm(
+        func   = mdp.current_right_foot_z,
+        weight  = 1e-10,  # or however you want to normalize
+        params = {
+            "asset_cfg": SceneEntityCfg("robot", body_names=["left_shin","right_shin"])
+        }
+    )
+    curr_x_R = RewTerm(
+        func   = mdp.current_right_foot_x,
+        weight  = 1e-10,
+        params = {
+            "asset_cfg": SceneEntityCfg("robot", body_names=["left_shin","right_shin"])
+        }
     )
     # future_feet = RewTerm(
     #         func    = mdp.desired_foot_targets_obs,
@@ -199,7 +258,7 @@ class AmberRoughLipEventsCfg(AmberEventsCfg):
 class AmberRoughLipEnvCfg(AmberRoughEnvCfg):
     """Configuration for the Amber Flat environment."""
     # events: AmberRoughLipEventsCfg = AmberRoughLipEventsCfg()
-    observations: AmberRoughLipObsCfg = AmberRoughLipObsCfg()
+    # observations: AmberRoughLipObsCfg = AmberRoughLipObsCfg()
     rewards : AmberRoughLipRewards = AmberRoughLipRewards()
     def __post_init__(self):
         # post init of parent

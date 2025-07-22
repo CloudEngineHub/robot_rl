@@ -6,7 +6,7 @@ from isaaclab.utils.math import euler_xyz_from_quat, wrap_to_pi, quat_rotate_inv
 import omni.usd
 import math,time
 from source.robot_rl.robot_rl.tasks.manager_based.robot_rl.amber.amber_env_cfg import PERIOD,WDES
-PERIOD = 0.2
+PERIOD = 0.8
 import casadi as ca
 reference_step = ca.Function.load("transfer/Model_based/Amber/amber_reference_step.casadi")
 from pathlib import Path
@@ -167,15 +167,15 @@ def feed_reference_trajectory(sim_time, scene, args_cli, ref_dir="/home/s-ritwik
     #     print(f"  [{j_idx}] {j_name}")
 
     # DEBUG: print mapping from actuated_names to indices
-    print("Mapping actuated_names -> joint_names indices:")
-    for i, name in enumerate(feed_reference_trajectory.actuated_names):
-        if name in all_names:
-            idx = all_names.index(name)
-            val = target_tensor[0, i].item()
-            print(f"  actuated[{i}] '{name}' -> joint_names[{idx}] (setting value {val*180/math.pi:.4f})")
-            joint_targets[:, idx] = target_tensor[0, i]
-        else:
-            print(f"  actuated[{i}] '{name}' NOT FOUND in joint_names!")
+    # print("Mapping actuated_names -> joint_names indices:")
+    # for i, name in enumerate(feed_reference_trajectory.actuated_names):
+    #     if name in all_names:
+    #         idx = all_names.index(name)
+    #         val = target_tensor[0, i].item()
+    #         print(f"  actuated[{i}] '{name}' -> joint_names[{idx}] (setting value {val*180/math.pi:.4f})")
+    #         joint_targets[:, idx] = target_tensor[0, i]
+    #     else:
+    #         print(f"  actuated[{i}] '{name}' NOT FOUND in joint_names!")
     # for i, name in enumerate(names):
     #     idx = all_names.index(name)
     #     joint_targets[:, idx] = target_tensor[0, i]
@@ -450,6 +450,28 @@ def swing_foot_trajectory(sim, scene, args_cli,
         # scene.update(sim_dt)
 
 
+def quat_apply_inverse(quat: torch.Tensor, vec: torch.Tensor) -> torch.Tensor:
+    """Apply an inverse quaternion rotation to a vector.
+
+    Args:
+        quat: The quaternion in (w, x, y, z). Shape is (..., 4).
+        vec: The vector in (x, y, z). Shape is (..., 3).
+
+    Returns:
+        The rotated vector in (x, y, z). Shape is (..., 3).
+    """
+    # store shape
+    shape = vec.shape
+    # reshape to (N, 3) for multiplication
+    quat = quat.reshape(-1, 4)
+    vec = vec.reshape(-1, 3)
+    # extract components from quaternions
+    xyz = quat[:, 1:]
+    t = xyz.cross(vec, dim=-1) * 2
+    return (vec - quat[:, 0:1] * t + xyz.cross(t, dim=-1)).view(shape)
+
+
+
 def run_simulator(sim, scene, policy, simulation_app, args_cli):
     """
     sim            : isaaclab.sim.SimulationContext
@@ -494,8 +516,9 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
             simulation_app.update()
 
             # ─── Gather sensor data from env 0 ───
-            qpos = amber.data.joint_pos.cpu().numpy()[0]      # (7,)
-            qvel = amber.data.joint_vel.cpu().numpy()[0]      # (7,)
+            qpos = amber.data.joint_pos.cpu().numpy()[0] - amber.data.default_joint_pos.cpu().numpy()      # (7,)
+            # print(qpos.shape)
+            qvel = amber.data.joint_vel.cpu().numpy()[0]- amber.data.default_joint_vel .cpu().numpy()    # (7,)
             root = amber.data.root_state_w.cpu().numpy()[0]   # (13,)
             # ori  = root[3:7]
             # quat = np.array([ori[3], ori[0], ori[1], ori[2]], dtype=np.float32)
@@ -504,20 +527,31 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
             ori  = amber.data.body_quat_w[0, 3, :].cpu().numpy()   # (4,)  qw,qx,qy,qz
             quat = np.array([ori[0], ori[1], ori[2], ori[3]], dtype=np.float32)  # same order
 
-            body_ang_vel = amber.data.body_link_ang_vel_w[0, 3, :].cpu()
+            body_ang_vel = amber.data.body_link_ang_vel_w[0, 3, :].cpu().numpy()
             des_vel = np.array(args_cli.desired_vel, dtype=np.float32)
+            _G_VEC_W = torch.tensor([0.0, 0.0, -1.0])
+            # projected gravity
+            quat  = amber.data.body_link_quat_w[:, 3, :]          # [N,4]  (w,x,y,z) of link 3
+            # ensure gravity vector on correct device & dtype
+            g_vec = _G_VEC_W.to(quat)
 
+            # broadcast g_vec to match envs
+            g = g_vec.expand(quat.shape[0], 3)
+            # rotate into body frame via inverse quaternion
+            g_body = quat_apply_inverse(quat, g).cpu().numpy()       # [N,3]
             # ─── Build observation & run policy ───
             obs = policy.create_obs(
                 qjoints=     qpos,
                 body_ang_vel=body_ang_vel,
                 qvel=        qvel,
-                time=        sim_time,
-                projected_gravity=get_projected_gravity(quat),
+                time=        sim.current_time,
+                # projected_gravity=get_projected_gravity(quat),
+                projected_gravity=g_body,
                 des_vel=     des_vel,
             )
             _ = policy.get_action(obs.to(device))   # updates policy.action_isaac
-            action_isaac = policy.action_isaac       # (4,)
+            # action_isaac = policy.action_isaac       # (4,)
+            action_isaac = policy.get_action_isaac()
             # action_isaac = policy.get_action(obs.to(device))
             # ─── Convert to torch targets ───
             default_all   = amber.data.default_joint_pos.clone()  # (1,7)
@@ -528,6 +562,7 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
             actuated_names = actuated_names = ["q1_left","q1_right","q2_left","q2_right"]
 
             all_names      = list(amber.data.joint_names)
+            # print(all_names)
             for i, name in enumerate(actuated_names):
                 idx = all_names.index(name)
                 joint_targets[:, idx] = target_tensor[0, i]
@@ -541,10 +576,10 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
             #     frequency=1    # one cycle every 10 seconds
             # )   
 
-            # amber.set_joint_position_target(joint_targets)
+            amber.set_joint_position_target(joint_targets)
             # sinusoid_test(amber, sim_time, amplitude=0.5, frequency=2)
 
-            feed_reference_trajectory(sim_time, scene, args_cli)
+            # feed_reference_trajectory(sim_time, scene, args_cli)
             # ─── Log CSV ───
             ref_np = getattr(
                 feed_reference_trajectory,
@@ -576,19 +611,22 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
             scene.update(sim_dt)
             # for eid in range(amber.data.joint_pos.shape[0]):
             #     debug_print_joints(amber, env_id=eid)
-            sim_time += sim_dt
+            # sim_time += sim_dt
+            sim_time = sim.current_time
+
+            # print(sim_time,sim.current_time)
             count   += 1            
         
             # ─────────────────────────── LIP model ────────────────────────────────────
-            next_foot = compute_step_location_local(
-                sim_time = sim_time,
-                scene    = scene,
-                args_cli = args_cli,
-                nom_height=1.38,
-                Tswing    = PERIOD/2.0,
-                wdes      = WDES,
-                visualize = True
-            )
+            # next_foot = compute_step_location_local(
+            #     sim_time = sim_time,
+            #     scene    = scene,
+            #     args_cli = args_cli,
+            #     nom_height=1.38,
+            #     Tswing    = PERIOD/2.0,
+            #     wdes      = WDES,
+            #     visualize = True
+            # )
             # swing_foot_trajectory(sim, scene, args_cli,
             #           next_foot,
             #           sim_dt=sim_dt,

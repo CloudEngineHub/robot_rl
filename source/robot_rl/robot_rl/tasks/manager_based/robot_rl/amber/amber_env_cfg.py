@@ -48,6 +48,7 @@ class AmberActionsCfg:
         scale=1.0,
     )
 
+
 # TODO: Try playing with the period for the lip model
 PERIOD = 0.8 #0.6 #0.8  # (0.4 s swing phase)
 WDES=0.0
@@ -129,19 +130,23 @@ class AmberRewardCfg(RewardsCfg):
     termination_penalty = RewTerm(func=mdp.is_terminated, weight=-400.0)
 
 
-    ## Functions for plotting rewards:
+    ## -------------Functions for plotting rewards:
     curr_vel = RewTerm(
         func=mdp.curr_vel_fn,
-        weight=1,
+        weight=1e-10,
         params={"command_name": "base_velocity",
                         "std": 0.4,      },      # required parameter},
     )
     cmd_vel_given = RewTerm(
         func=mdp.cmd_vel_fn,
-        weight=1,
+        weight=1e-10,
         params={"command_name": "base_velocity",
                         "std": 0.4,      },      # required parameter},
     )
+
+
+
+    ## Reward functions:
     # track forward velocity (x) – using the base class's XY function is fine since y is always zero
     track_lin_vel_xy = RewTerm(
         func=mdp.track_lin_vel_x_amber,

@@ -13,14 +13,14 @@ from pxr import Gf, UsdPhysics, UsdGeom
 PERIOD=0.8
 WDES=0
 # … (copy over your ROBOT_ASSETS_AMBER, AMBER_CONFIG, NewRobotsSceneCfg) …
-STIFFNESS = 10000
-DAMPING =500
+STIFFNESS = 1000
+DAMPING =50
 # --- AMBER ROBOT CONFIGURATION ---
 ROBOT_ASSETS_AMBER = "/home/s-ritwik/src/robot_rl/robot_assets/amber5/amber"
 
 AMBER_CONFIG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{ROBOT_ASSETS_AMBER}/amber_lip.usd",
+        usd_path=f"{ROBOT_ASSETS_AMBER}/amber.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,

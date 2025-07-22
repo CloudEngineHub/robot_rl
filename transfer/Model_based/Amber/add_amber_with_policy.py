@@ -73,7 +73,7 @@ if args_cli.video:
 from transfer.Model_based.Amber.rl_policy_wrapper import RLPolicy
 from transfer.Model_based.Amber.amber_cfg import NewRobotsSceneCfg
 from transfer.Model_based.Amber.amber_utils import run_simulator
-# from transfer.Model_based.Amber.amber_utils_policy import run_simulator
+from transfer.Model_based.Amber.amber_utils_policy import run_simulator
 # from transfer.Model_based.Amber.amber_utils_lip_at_policy_rate import run_simulator
 def _start_video_capture(filename: str, fps: float):
     """

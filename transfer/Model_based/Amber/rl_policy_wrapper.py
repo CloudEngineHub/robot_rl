@@ -98,7 +98,7 @@ class RLPolicy:
 
         # 0:3 — base angular velocity
         obs[0:3] = body_ang_vel * self.ang_vel_scale
-        # print("----------------",body_ang_vel)
+        # print("scale----------------",self.ang_vel_scale)
         # 3:6 — projected gravity
         obs[3:6] = projected_gravity
 
@@ -108,7 +108,7 @@ class RLPolicy:
 
         # 9:16 — joint positions relative to default stance
         # self.default_angles must now be length-7
-        q_rel = qjoints - np.array(self.default_angles, dtype=np.float32)
+        q_rel = qjoints #- np.array(self.default_angles, dtype=np.float32)
         obs[9:16] = q_rel
 
         # 16:23 — joint velocities (scaled)

@@ -122,7 +122,7 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         ##
         # Commands
         ##
-        self.commands.base_velocity.ranges.lin_vel_x = (-1.5, 1.5) # 0 - 1
+        self.commands.base_velocity.ranges.lin_vel_x = (-1.5, 0) # 0 - 1
         self.commands.base_velocity.ranges.lin_vel_y = (0,0) #(-1.0, 1.0)
         self.commands.base_velocity.ranges.ang_vel_z = (0, 0)
         self.events.add_base_mass = None
@@ -160,9 +160,9 @@ class AmberRoughEnvCfg(AmberEnvCfg):
        # big penalty on fall (torso contact)
         self.rewards.termination_penalty.weight           = -200.0  
         # reward forward x‐velocity tracking
-        self.rewards.track_lin_vel_xy.weight              =  0#20#80.0  
+        self.rewards.track_lin_vel_xy.weight              =  20#80.0  
         # penalize asymmetric joints per cycle
-        self.rewards.joint_symmetry_reward.weight        =  0#2#
+        self.rewards.joint_symmetry_reward.weight        =  10#2#
         # self.rewards.joint_symmetry_reward.params["diff_threshold"] = 5
         self.rewards.joint_symmetry_reward.params["debug"] = False
         # penalize asymmetric joints per cycle
@@ -176,7 +176,7 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         # punish large arm joint deviations
         self.rewards.joint_angles.weight                  =   -.2#-4.0  
         # reward maintaining torso upright within window, penalize beyond threshold
-        self.rewards.torso_orientation.weight             =    0.2#2.0  
+        self.rewards.torso_orientation.weight             =    4#2.0  
         # reward alternating foot contacts vs repeats
         self.rewards.alternation_contact.weight           =   4
         # reward progressive foot placement per cycle
@@ -184,7 +184,7 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         # per‐cycle foot‐contact correctness (+5 for exactly one each, else penalty)
         self.rewards.foot_cycle_sym.weight                =   0#4
         # penalize asymmetric foot airtime
-        self.rewards.symmetric_foot_airtime.weight        =  0.0#
+        self.rewards.symmetric_foot_airtime.weight        =  1#
         self.rewards.symmetric_foot_airtime.params["diff_threshold"] = 5
         self.rewards.symmetric_foot_airtime.params["reward_good"] = 8
         # penalize foot sliding (squared speed during contact)
