@@ -1,4 +1,5 @@
 import isaaclab.sim as sim_utils
+import isaaclab.sim.schemas as schemas_cfg
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 
@@ -25,6 +26,7 @@ AMBER_CFG = ArticulationCfg(
             enable_gyroscopic_forces=True,
 
         ),
+        # mass_props = schemas_cfg.MassPropertiesCfg(mass=7.0),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
             solver_position_iteration_count=8,
@@ -40,6 +42,10 @@ AMBER_CFG = ArticulationCfg(
             "q2_left": -1.3705312,
             "q1_right": 0.85542953,
             "q2_right": -1.3705312,
+            # "q1_left": 0.85542953/3,
+            # "q2_left": -1.3705312/3,
+            # "q1_right": 0.85542953/3,
+            # "q2_right": -1.3705312/3,
             # "q1_left": 0.0,
             # "q2_left": 0.0,
             # "q1_right": 0.0,

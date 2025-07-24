@@ -19,6 +19,8 @@ import cli_args  # isort: skip
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
+parser.add_argument("--mass", type=int, default=13, help="Mass of torso")
+
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
@@ -66,6 +68,22 @@ from rsl_rl.runners import OnPolicyRunner
 
 import robot_rl.tasks  # noqa: F401
 
+import omni.usd
+from isaaclab.sim import schemas, schemas_cfg
+from pxr import UsdPhysics             # need this to apply the API
+
+
+def set_torso_mass(mass_kg: float, env_id: int = 0):
+    stage      = omni.usd.get_context().get_stage()
+    torso_path = f"/World/envs/env_{env_id}/Amber/amber3_PF/torso"
+
+    # Ensure MassAPI exists; modify_mass_properties() returns False otherwise
+    prim = stage.GetPrimAtPath(torso_path)
+    if not UsdPhysics.MassAPI(prim):
+        UsdPhysics.MassAPI.Apply(prim)                          # :contentReference[oaicite:2]{index=2}
+
+    cfg = schemas_cfg.MassPropertiesCfg(mass=mass_kg)           # only this attr is set :contentReference[oaicite:3]{index=3}
+    schemas.modify_mass_properties(torso_path, cfg, stage)      # returns True on success :contentReference[oaicite:4]{index=4}
 
 def main():
     """Play with RSL-RL agent."""
@@ -94,6 +112,11 @@ def main():
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
     base_env = env.unwrapped
+
+    # #custom command velocity
+    # command_tensor = torch.tensor([[-0.4, 0.0, 0.0]], device=base_env.device).repeat(base_env.num_envs, 1)
+    # base_env.command_manager.command = command_tensor
+    
     obs_mgr  = base_env.observation_manager
     rew_mgr  = base_env.reward_manager                 # new: access reward manager
 
@@ -210,6 +233,7 @@ def main():
     # reset environment
     obs, _ = env.get_observations()
     timestep = 0
+    set_torso_mass(args_cli.mass)
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()

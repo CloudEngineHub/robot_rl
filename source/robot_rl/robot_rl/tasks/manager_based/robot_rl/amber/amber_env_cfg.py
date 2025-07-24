@@ -37,7 +37,21 @@ from . import mdp
 ##
 # MDP settings
 ##
+# from isaaclab.sim import schemas, schemas_cfg
+# from pxr import UsdPhysics             # need this to apply the API
+# import omni.usd
 
+# def set_torso_mass(mass_kg: float, env_id: int = 0):
+#     stage      = omni.usd.get_context().get_stage()
+#     torso_path = f"/World/envs/env_{env_id}/Amber/amber3_PF/torso"
+
+#     # Ensure MassAPI exists; modify_mass_properties() returns False otherwise
+#     prim = stage.GetPrimAtPath(torso_path)
+#     if not UsdPhysics.MassAPI(prim):
+#         UsdPhysics.MassAPI.Apply(prim)                          # :contentReference[oaicite:2]{index=2}
+
+#     cfg = schemas_cfg.MassPropertiesCfg(mass=mass_kg)           # only this attr is set :contentReference[oaicite:3]{index=3}
+#     schemas.modify_mass_properties(torso_path, cfg, stage)      # returns True on success :contentReference[oaicite:4]{index=4}
 
 @configclass
 class AmberActionsCfg:
@@ -52,6 +66,25 @@ class AmberActionsCfg:
 # TODO: Try playing with the period for the lip model
 PERIOD = 0.8 #0.6 #0.8  # (0.4 s swing phase)
 WDES=0.0
+
+
+@configclass
+class CommandsCfg:
+    # base_velocity = mdp.UniformVelocityCommandCfg(
+    #     asset_name="robot",
+    #     resampling_time_range=(10.0, 10.0),
+    #     rel_standing_envs=0.02,
+    #     rel_heading_envs=0.0,
+    #     debug_vis=True,
+    #     ranges=mdp.UniformVelocityCommandCfg.Ranges(
+    #         lin_vel_x=(-1, -1), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0., 0.)
+    #     ),
+    # )
+    base_velocity = mdp.LoopVelocityCommandCfg(
+        asset_name="robot",
+        sequence=[0.0, -0.5, -1.0, -1.2, -0.7],    # your custom cycle
+        resampling_time_range=(3.0, 3.0),          # 3 seconds per value
+    )
 
 @configclass
 class AmberObservationsCfg(ObservationsCfg):
@@ -342,6 +375,7 @@ class AmberEnvCfg(LocomotionVelocityRoughEnvCfg):
     observations: AmberObservationsCfg = AmberObservationsCfg()
     rewards: AmberRewardCfg = AmberRewardCfg()
     events: AmberEventsCfg = AmberEventsCfg()
-
+    commands: CommandsCfg =CommandsCfg()
     def __post_init__(self):
         super().__post_init__()
+        # set_torso_mass(10)

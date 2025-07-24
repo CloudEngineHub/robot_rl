@@ -118,7 +118,17 @@ You can load the Model-based controller for Amber or the any policy that you tra
 ```bash
 python -m transfer.Model_based.Amber.add_amber_with_policy  --config_file transfer/Model_based/Amber/amber_config.yaml --num_envs 1 --policy 
 ```
-
+#### Notes for Amber:
+  - Root link of Amber is fixed (due to constraints) so 
+  ```bash
+  source/isaaclab/isaaclab/envs/mdp/commands/velocity_command.py
+  ```
+  is updated to latch on to the torso of Amber
+  - Use 
+  ```bash 
+  play_and_plot.py 
+  ``` 
+  for logging all the reward and observations for future plotting. (if you want a custom velocity generator which would give constant commands to compare models, uncomment "command cfg" in amber_env_cfg)
 ## Code formatting
 
 We have a pre-commit template to automatically format your code.

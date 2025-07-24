@@ -22,7 +22,7 @@ parser.add_argument(
     help="Where to write joint‐position logs",
 )
 parser.add_argument(
-    "--desired_vel", type=float, nargs=3, default=[-.5, 0.0, 0.0],
+    "--desired_vel", type=float, nargs=3, default=[-1.0, 0.0, 0.0],
     help="Desired base command [vx, vy, vyaw]"
 )
 parser.add_argument(
@@ -83,6 +83,7 @@ if args_cli.lip == 1:
 
 else:
     from transfer.Model_based.Amber.amber_rl_wrapper import RLPolicy
+    # print("yes")
     from transfer.Model_based.Amber.amber_utils import run_simulator
 
 from transfer.Model_based.Amber.amber_cfg import NewRobotsSceneCfg

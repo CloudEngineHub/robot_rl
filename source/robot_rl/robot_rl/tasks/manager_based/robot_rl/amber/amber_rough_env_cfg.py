@@ -27,6 +27,15 @@ import robot_rl.tasks.manager_based.robot_rl.amber.mdp as mdp
 ##
 from .amber_env_cfg import AmberEnvCfg
 from .amber5 import AMBER_CFG
+
+def sampled_forward_only(env, params):
+    """
+    Always outputs a constant vx, with vy=0, ωz=0.
+    """
+    print("custom")
+    n = env.num_envs
+    vx = torch.full((n,), params.get("vx", 0.5), device=env.device)
+    return torch.stack([vx, torch.zeros_like(vx), torch.zeros_like(vx)], dim=1)
 ##
 # Environment configuration
 
@@ -36,6 +45,24 @@ class AmberRoughEnvCfg(AmberEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
+
+        # from isaaclab.sim import schemas, schemas_cfg
+        # from pxr import UsdPhysics             # need this to apply the API
+        # import omni.usd
+
+        # def set_torso_mass(mass_kg: float, env_id: int = 0):
+        #     stage      = omni.usd.get_context().get_stage()
+        #     torso_path = f"/World/envs/env_{env_id}/Amber/amber3_PF/torso"
+
+        #     # Ensure MassAPI exists; modify_mass_properties() returns False otherwise
+        #     prim = stage.GetPrimAtPath(torso_path)
+        #     if not UsdPhysics.MassAPI(prim):
+        #         UsdPhysics.MassAPI.Apply(prim)                          # :contentReference[oaicite:2]{index=2}
+
+        #     cfg = schemas_cfg.MassPropertiesCfg(mass=mass_kg)           # only this attr is set :contentReference[oaicite:3]{index=3}
+        #     schemas.modify_mass_properties(torso_path, cfg, stage)      # returns True on success :contentReference[oaicite:4]{index=4}
+        # set_torso_mass(10)
+
         base_reset = self.events.reset_base
         base_reset.params["pose_range"]["yaw"] = (0.0, 0.0)
 
@@ -122,9 +149,11 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         ##
         # Commands
         ##
-        self.commands.base_velocity.ranges.lin_vel_x = (-1.5, 1.5) # 0 - 1
-        self.commands.base_velocity.ranges.lin_vel_y = (0,0) #(-1.0, 1.0)
-        self.commands.base_velocity.ranges.ang_vel_z = (0, 0)
+        # self.commands.base_velocity.sampler = sampled_forward_only
+        # self.commands.base_velocity.params = {"vx": 0.5}
+        # self.commands.base_velocity.ranges.lin_vel_x = (-1.5, 1) # 0 - 1
+        # self.commands.base_velocity.ranges.lin_vel_y = (0,0) #(-1.0, 1.0)
+        # self.commands.base_velocity.ranges.ang_vel_z = (0, 0)
         self.events.add_base_mass = None
         ##
         # Terminations
@@ -162,11 +191,11 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         # reward forward x‐velocity tracking
         self.rewards.track_lin_vel_xy.weight              =  30#80.0  
         # penalize asymmetric joints per cycle
-        self.rewards.joint_symmetry_reward.weight        =  0.5#2#
+        self.rewards.joint_symmetry_reward.weight        =  0#2#
         # self.rewards.joint_symmetry_reward.params["diff_threshold"] = 5
         self.rewards.joint_symmetry_reward.params["debug"] = False
         # penalize asymmetric joints per cycle
-        self.rewards.stride_consistency.weight        =  20#10#
+        self.rewards.stride_consistency.weight        =  10#10#
         # self.rewards.joint_symmetry_reward.params["diff_threshold"] = 5
         self.rewards.stride_consistency.params["debug"] = False
         # Reward phase based contacts: stance and wing
@@ -180,11 +209,11 @@ class AmberRoughEnvCfg(AmberEnvCfg):
         # reward alternating foot contacts vs repeats
         self.rewards.alternation_contact.weight           =   4
         # reward progressive foot placement per cycle
-        self.rewards.progressive_step.weight              =    .2#15.0  
+        self.rewards.progressive_step.weight              =    3#15.0  
         # per‐cycle foot‐contact correctness (+5 for exactly one each, else penalty)
         self.rewards.foot_cycle_sym.weight                =   0#4
         # penalize asymmetric foot airtime
-        self.rewards.symmetric_foot_airtime.weight        =  1#
+        self.rewards.symmetric_foot_airtime.weight        =  0#
         self.rewards.symmetric_foot_airtime.params["diff_threshold"] = 5
         self.rewards.symmetric_foot_airtime.params["reward_good"] = 8
         # penalize foot sliding (squared speed during contact)

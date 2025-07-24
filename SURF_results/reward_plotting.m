@@ -30,7 +30,7 @@ cmdVelGiven = T.cmd_vel_given*1e10;
 
 % 3. Low-pass filter on curr_vel  (Butterworth -> lowpass)
 Fs   = 1/dt;                % sampling rate  (Hz)
-Fc   = 0.1;                   % cut-off (Hz) – change to taste
+Fc   = 0.00001;                   % cut-off (Hz) – change to taste
 currVel_lp = lowpass(currVel, Fc, Fs);
 
 % 4. Plot all three curves
@@ -47,7 +47,7 @@ title('Current vs. Command Velocity Rewards (with LPF)');
 legend({'curr\_vel','cmd\_vel\_given'}, ...
        'Interpreter','none','Location','best');set(gca, 'FontSize', 16);
 set(gca, 'FontSize', 16);
-avg_err=mean((currVel-cmdVelGiven)./cmdVelGiven)*100
+avg_err=mean(abs((currVel_lp-cmdVelGiven)./cmdVelGiven))*100
 % fprintf("Avg error:%d ",);
 %% 3D plot
 

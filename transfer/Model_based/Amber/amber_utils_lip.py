@@ -18,7 +18,23 @@ import math
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from source.robot_rl.robot_rl.tasks.manager_based.robot_rl.amber.amber_rough_env_lip_cfg import Nom_ht,half_cycle,visualise_flag
 from isaaclab.managers import SceneEntityCfg
+from typing import Sequence
 
+from isaaclab.sim import schemas, schemas_cfg
+from pxr import UsdPhysics             # need this to apply the API
+
+
+def set_torso_mass(mass_kg: float, env_id: int = 0):
+    stage      = omni.usd.get_context().get_stage()
+    torso_path = f"/World/envs/env_{env_id}/Amber/amber3_PF/torso"
+
+    # Ensure MassAPI exists; modify_mass_properties() returns False otherwise
+    prim = stage.GetPrimAtPath(torso_path)
+    if not UsdPhysics.MassAPI(prim):
+        UsdPhysics.MassAPI.Apply(prim)                          # :contentReference[oaicite:2]{index=2}
+
+    cfg = schemas_cfg.MassPropertiesCfg(mass=mass_kg)           # only this attr is set :contentReference[oaicite:3]{index=3}
+    schemas.modify_mass_properties(torso_path, cfg, stage)      # returns True on success :contentReference[oaicite:4]{index=4}
 
 # persistent storage for each scene instance
 _desired_targets = {}
@@ -68,14 +84,14 @@ def desired_foot_targets_obs(
     swing = 1 if sign_now > 0 else 0
     if half_cycle:
         if changed.any():
-            new_steps = compute_step_location_local(
+            new_steps = compute_step_location_local_policy(
                 scene, sim_time, n_envs, desired_vel,
                 nom_height, Ts, wdes, visualize=False
             )  # [n_envs,3]
             targets[changed, swing, :] = new_steps[changed]
             _prev_sign[key] = sign_tensor.clone()
     else:
-        new_steps = compute_step_location_local(
+        new_steps = compute_step_location_local_policy(
             scene, sim_time, n_envs, desired_vel,
             nom_height, Ts, wdes, visualize=False
         )
@@ -97,15 +113,30 @@ def desired_foot_targets_obs(
                 UsdGeom.XformCommonAPI(sph).SetTranslate(
                     Gf.Vec3d(*targets[i, side, :].cpu().tolist())
                 )
-
+        # 1) COM as big red sphere
+        com = (13*amber.data.body_com_pos_w[:, 3, :]+3.4261*amber.data.body_com_pos_w[:, 4, :]
+            +1.1526*amber.data.body_com_pos_w[:, 5, :]+3.4261*amber.data.body_com_pos_w[:, 6, :]
+            +1.1526*amber.data.body_com_pos_w[:, 7, :] )/(13+2*3.4261+2*1.1526
+        )  # [N,3]
+        for i in range(n_envs):
+            path = f"/World/debug/com_sphere_{i}"
+            if not stage.GetPrimAtPath(path):
+                sph = UsdGeom.Sphere.Define(stage, path)
+                sph.GetRadiusAttr().Set(0.1)
+                sph.CreateDisplayColorAttr().Set([Gf.Vec3f(1.0, 0.0, 0.0)])
+            else:
+                sph = UsdGeom.Sphere(stage.GetPrimAtPath(path))
+            UsdGeom.XformCommonAPI(sph).SetTranslate(Gf.Vec3d(*com[i].cpu().tolist()))
     # compute relative x,z to current shin positions
-    pos = amber.data.body_pos_w[:, [asset_cfg.body_ids[0], asset_cfg.body_ids[1]], :]  # [n_envs,2,3]
+    # pos = amber.data.body_pos_w[:, [asset_cfg.body_ids[0], asset_cfg.body_ids[1]], :]  # [n_envs,2,3]
+    B   = amber.data.body_pos_w.shape[1]
+    pos = amber.data.body_pos_w[:, [B-2, B-1], :]  # [n_envs,2,3]
     rel = targets - pos                        # [n_envs,2,3]
     rel_xz = rel[:, :, [0, 2]]                 # [n_envs,2,2]
     return rel_xz.reshape(n_envs, 4)
 
 
-def compute_step_location_local(
+def compute_step_location_local_policy(
     scene,
     sim_time: float,
     n_envs: int,
@@ -306,6 +337,7 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
     x_array = ca.GenDM_zeros(n_envs,N)
     y_array = ca.GenDM_zeros(n_envs,N)
     policy_flag = args_cli.policy
+    # set_torso_mass(10)
 
     try:
         while simulation_app.is_running():
@@ -350,22 +382,18 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
             # rotate into body frame via inverse quaternion
             g_body = quat_apply_inverse(quat, g).cpu().numpy()       # [N,3]
             ## LIP OBS
-            future_feet= ObsTerm(
-                func    = mdp.desired_foot_targets_obs,
-                history_length = 1,
-                scale   = 1.0,
-                params  = {
-                    "Ts":           PERIOD/2.0,
-                    "nom_height":   Nom_ht,
-                    "wdes":         0,
-                    "command_name": "base_velocity",
-                    "asset_cfg":    SceneEntityCfg("robot",body_names=["left_shin","right_shin"],),
-                    "debug":        False,
-                    "visualize":    False,
-                    "half_cycle":   half_cycle,
-                },
-            )
-            print("loading future feet",future_feet)
+            future_feet = desired_foot_targets_obs(
+                scene,
+                sim_time,
+                args_cli.num_envs,
+                args_cli.desired_vel,
+                Ts=PERIOD/2,
+                nom_height=Nom_ht,
+                wdes=WDES,
+                visualize=True,      # or False
+                half_cycle=half_cycle,
+            ).cpu().numpy()
+            # print("loading future feet",future_feet)
             # ─── Build observation & run policy ───
             obs = policy.create_obs(
                 qjoints=     qpos,
@@ -374,6 +402,7 @@ def run_simulator(sim, scene, policy, simulation_app, args_cli):
                 time=        sim.current_time,
                 projected_gravity=g_body,
                 des_vel=     des_vel,
+                future_feet= future_feet,
             )
             if policy_flag == 1:
                 _ = policy.get_action(obs.to(device))   # updates policy.action_isaac

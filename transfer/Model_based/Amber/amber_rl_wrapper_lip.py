@@ -82,10 +82,10 @@ class RLPolicy:
         time: float,
         projected_gravity: np.ndarray,  # shape (3,)
         des_vel: np.ndarray,           # shape (3,)
-        future_feet                    # shape (4.) Lx Lz Rx Rz
+        future_feet: np.ndarray,      # shape (4.) Lx Lz Rx Rz
     ) -> torch.Tensor:
         """
-        Build policy obs of shape (1,29) from:
+        Build policy obs of shape (1,33) from:
         0:3   base_ang_vel        (3,)
         3:6   projected_gravity   (3,)
         6:9   velocity_commands   (3,)
@@ -94,8 +94,9 @@ class RLPolicy:
         23:27 past actions        (4,)
         27    sin_phase           (1,)
         28    cos_phase           (1,)
+        29:33 future_feet         (4,)
         """
-        obs = np.zeros(29, dtype=np.float32)
+        obs = np.zeros(33, dtype=np.float32)
 
         # 0:3 — base angular velocity
         obs[0:3] = body_ang_vel * self.ang_vel_scale
@@ -124,7 +125,7 @@ class RLPolicy:
         cos_p = np.cos(2 * np.pi * time / self.period)
         obs[27] = sin_p
         obs[28] = cos_p
-
+        obs[29:33] =future_feet
         # turn into a (1,29) torch tensor
         return torch.from_numpy(obs).unsqueeze(0)
 
