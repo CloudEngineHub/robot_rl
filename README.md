@@ -129,6 +129,9 @@ python -m transfer.Model_based.Amber.add_amber_with_policy  --config_file transf
   play_and_plot.py 
   ``` 
   for logging all the reward and observations for future plotting. (if you want a custom velocity generator which would give constant commands to compare models, uncomment "command cfg" in amber_env_cfg)
+
+  - Use `SURF_results/reward_plotting.m` for generating plots saved via play_and_plot.py
+
 ## Code formatting
 
 We have a pre-commit template to automatically format your code.

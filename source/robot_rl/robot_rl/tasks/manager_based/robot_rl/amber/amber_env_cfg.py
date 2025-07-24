@@ -379,3 +379,7 @@ class AmberEnvCfg(LocomotionVelocityRoughEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         # set_torso_mass(10)
+        ## uncomment the below code when commenting CommandsCfg
+        # self.commands.base_velocity.ranges.lin_vel_x = (-1.5, 1) # 0 - 1
+        # self.commands.base_velocity.ranges.lin_vel_y = (0,0) #(-1.0, 1.0)
+        # self.commands.base_velocity.ranges.ang_vel_z = (0, 0)

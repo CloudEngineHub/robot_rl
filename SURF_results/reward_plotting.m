@@ -2,7 +2,7 @@ close all;  clc;clear;
 
 % 1. Load the log as a table (keeps headers)
 % T = readtable('model_data/2025-07-20_00-01-48_33349.csv');   % first column must be 'step'
-T = readtable('model_data/2025-07-22_15-55-42_5000.csv');   % first column must be 'step'
+T = readtable('model_data/2025-07-22_17-26-18_5000.csv');   % first column must be 'step'
 % T = readtable('model_data/2025-07-09_14-55-53_9999.csv');   % first column must be 'step'
 
 dt   = 0.02;                % sec between physics steps (✓ adjust if needed)
