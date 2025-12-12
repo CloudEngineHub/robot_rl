@@ -23,7 +23,7 @@ from .g1_trajopt_reward import G1TrajOptCLFRewards
 ##
 # Lyapunov Weights
 ##
-WALKING_Q_weights = [
+WAVING_Q_weights = [
     25.0,   250.0,      # com_x pos, vel
     500.0,   20.0,      # com_y pos, vel
     650.0,   10.0,      # com_z pos, vel
@@ -54,7 +54,7 @@ WALKING_Q_weights = [
 ]
 
 
-WALKING_R_weights = [
+WAVING_R_weights = [
         0.1, 0.1, 0.1,      # CoM inputs: allow moderate effort
         0.05,0.05,0.05,     # pelvis inputs: lower torque priority
         0.05,0.05,0.05,     # swing foot linear inputs
@@ -70,42 +70,37 @@ WALKING_R_weights = [
 # Commands
 ##
 @configclass
-class G1GaitLibraryCommandsCfg(HumanoidCommandsCfg):
+class G1WavingCommandsCfg(HumanoidCommandsCfg):
     """Configuration for gait library commands."""
     traj_ref = TrajectoryCommandCfg(
         contact_bodies = [".*_ankle_roll_link"],
 
-        # manager_type = "trajectory",
-        # path="source/robot_rl/robot_rl/assets/robots/test_walking_trajectories",
-
-        manager_type="library",
-        # path="source/robot_rl/robot_rl/assets/robots/test_walking_library",
+        manager_type="trajectory",
         hf_repo = "zolkin/robot_rl",
-        path = "trajectories/walking",
+        path = "trajectories/waving/waving_config_solution.yaml",
 
         conditioner_generator_name = "base_velocity",
         num_outputs = 27,
-        Q_weights = WALKING_Q_weights,
-        R_weights = WALKING_R_weights,
+        Q_weights = WAVING_Q_weights,
+        R_weights = WAVING_R_weights,
     )
 
 ##
 # Curriculums
 ##
 @configclass
-class G1WalkingCLFCurriculumCfg:
+class G1WavingCLFCurriculumCfg:
     """Curriculum terms for the MDP."""
 
     clf_curriculum = CurrTerm(func=mdp.clf_curriculum, params={"update_interval": 1000, "min_val": 20.0})
 
-
 @configclass
-class G1WalkingCLFEnvCfg(HumanoidEnvCfg):
+class G1WavingCLFEnvCfg(HumanoidEnvCfg):
     """Configuration for the G1 environment with gait library."""
-    commands: G1GaitLibraryCommandsCfg = G1GaitLibraryCommandsCfg()
+    commands: G1WavingCommandsCfg = G1WavingCommandsCfg()
     observations: G1TrajOptObservationsCfg = G1TrajOptObservationsCfg()
     rewards: G1TrajOptCLFRewards = G1TrajOptCLFRewards()
-    curriculum: G1WalkingCLFCurriculumCfg = G1WalkingCLFCurriculumCfg()
+    curriculum: G1WavingCLFCurriculumCfg = G1WavingCLFCurriculumCfg()
 
     def __post_init__(self):
         # Post init of parent
@@ -120,7 +115,7 @@ class G1WalkingCLFEnvCfg(HumanoidEnvCfg):
         # Commands
         ##
         # Configure velocity ranges for different gaits
-        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)  # Allow full range
+        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)  # Allow full range
         self.commands.base_velocity.ranges.lin_vel_y = (0, 0)
         self.commands.base_velocity.ranges.ang_vel_z = (0, 0) # TODO: put back: (-0.5, 0.5)
         self.commands.base_velocity.ranges.heading = (0,0)
@@ -192,15 +187,6 @@ class G1WalkingCLFEnvCfg(HumanoidEnvCfg):
         #     "update_interval": 20000
         # }
 
-        # self.rewards.vdot_tanh = RewTerm(
-        #     func=mdp.vdot_tanh,
-        #     weight= 2.0,
-        #     params={
-        #         "command_name": "hzd_ref",
-        #         "alpha": 1.0,
-        #     }
-        # )
-
         # self.rewards.clf_decreasing_condition = None
 
         ##
@@ -217,7 +203,7 @@ class G1WalkingCLFEnvCfg(HumanoidEnvCfg):
         self.curriculum.clf_curriculum = None
 
 @configclass
-class G1WalkingCLFECEnvCfg(G1WalkingCLFEnvCfg):
+class G1WavingCLFECEnvCfg(G1WavingCLFEnvCfg):
     """Configuration for the G1 environment with gait library."""
     def __post_init__(self):
         # Post init of parent
@@ -235,7 +221,7 @@ class G1WalkingCLFECEnvCfg(G1WalkingCLFEnvCfg):
         )
 
 @configclass
-class G1WalkingCLFEnvCfg_PLAY(G1WalkingCLFEnvCfg):
+class G1WavingCLFEnvCfg_PLAY(G1WavingCLFEnvCfg):
     """Configuration for the G1 environment with gait library."""
 
     def __post_init__(self):
@@ -259,7 +245,7 @@ class G1WalkingCLFEnvCfg_PLAY(G1WalkingCLFEnvCfg):
         self.events.push_robot = None
         
         
-        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)  # Allow full range
+        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)  # Allow full range
         self.commands.base_velocity.ranges.lin_vel_y = (0, 0)
         self.commands.base_velocity.ranges.ang_vel_z = (0,0)
 
