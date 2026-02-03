@@ -8,19 +8,18 @@ onboard:
     - pkg: g1_control
       params:
         hf_policy_folders: [
-          "walking_clf_sym/2026-01-28_18-37-10_walking_servo_backpack_joint_vel_noise_sym"
-          # "walking_clf_sym/2026-01-28_11-49-24_T6_walking_higher_cmd_sym",
+          "running_clf_sym/2026-02-02_19-52-32_running_longer_curriculum_sym"
         ]
         hf_repo_ids: [
           "zolkin/robot_rl",
         ]
         behavior_names: [
-          "walking"
+          "running"
         ]
         behavior_buttons: [
           3,                  # x
         ]
-        init_behavior: "walking"
+        init_behavior: "running"
         hf_repo_id: "zolkin/robot_rl"
         log: true
         log_decimation: 1 # relative to the control callback
@@ -53,15 +52,15 @@ onboard:
     - pkg: g1_control
       executable: high_level_control
       params:
-        v_x_min: -1.0
-        v_x_max: 1.0
-        v_y_max: 0.2
+        v_x_min: 0.0
+        v_x_max: 3.0
+        v_y_max: 0.5
         w_z_max: 0.5
         vel_increment: 0.1
         kp_yaw: 3.0
         kd_yaw: 0.1
-        kp_y: 3.0
-        kd_y: 0.1
+        kp_y: 5.0
+        kd_y: 0.3
         use_odom: True
         log_odom: True
         vel_increment_start: 0.0
@@ -101,9 +100,9 @@ onboard:
     - pkg: obelisk_unitree_cpp
       executable: obelisk_unitree_joystick
       params:
-        v_x_scale: 1.0
-        v_y_scale: 0.2
-        w_z_scale: 1.0
+        v_x_scale: 3.0
+        v_y_scale: 0.5
+        w_z_scale: 0.5
 
         vel_cmd_yaw: 13  # RY
       # callback_groups:
