@@ -8,7 +8,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/pelvis.STL"/>
+        <mesh filename="meshes/pelvis.STL"/>
       </geometry>
       <material name="dark">
         <color rgba="0.2 0.2 0.2 1"/>
@@ -24,7 +24,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/pelvis_contour_link.STL"/>
+        <mesh filename="meshes/pelvis_contour_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -33,7 +33,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/pelvis_contour_link.STL"/>-->
+<!--        <mesh filename="meshes/pelvis_contour_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -53,7 +53,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hip_pitch_link.STL"/>
+        <mesh filename="meshes/left_hip_pitch_link.STL"/>
       </geometry>
       <material name="dark">
         <color rgba="0.2 0.2 0.2 1"/>
@@ -62,7 +62,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hip_pitch_link.STL"/>-->
+<!--        <mesh filename="meshes/left_hip_pitch_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -82,18 +82,18 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hip_roll_link.STL"/>
+        <mesh filename="meshes/left_hip_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hip_roll_link.STL"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
+    <collision>
+      <origin xyz="0.02 0 -0.1" rpy="0 0.0524 0"/>
+      <geometry>
+        <cylinder radius="0.045" length="0.25"/>
+      </geometry>
+    </collision>
   </link>
   <joint name="left_hip_roll_joint" type="revolute">
     <origin xyz="0 0.052 -0.030465" rpy="0 -0.1749 0"/>
@@ -111,7 +111,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hip_yaw_link.STL"/>
+        <mesh filename="meshes/left_hip_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -120,7 +120,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hip_yaw_link.STL"/>-->
+<!--        <mesh filename="meshes/left_hip_yaw_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -140,18 +140,18 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_knee_link.STL"/>
+        <mesh filename="meshes/left_knee_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_knee_link.STL"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
+    <collision>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.05" length="0.3"/>
+      </geometry>
+    </collision>
   </link>
   <joint name="left_knee_joint" type="revolute">
     <origin xyz="-0.078273 0.0021489 -0.17734" rpy="0 0.1749 0"/>
@@ -169,7 +169,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_ankle_pitch_link.STL"/>
+        <mesh filename="meshes/left_ankle_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -178,7 +178,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_ankle_pitch_link.STL"/>-->
+<!--        <mesh filename="meshes/left_ankle_pitch_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -198,36 +198,36 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_ankle_roll_link.STL"/>
+        <mesh filename="meshes/left_ankle_roll_link.STL"/>
       </geometry>
       <material name="dark">
         <color rgba="0.2 0.2 0.2 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="-0.05 0.025 -0.03" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <sphere radius="0.005"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
-<!--    <collision>-->
-<!--      <origin xyz="-0.05 -0.025 -0.03" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <sphere radius="0.005"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
-<!--    <collision>-->
-<!--      <origin xyz="0.12 0.03 -0.03" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <sphere radius="0.005"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
-<!--    <collision>-->
-<!--      <origin xyz="0.12 -0.03 -0.03" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <sphere radius="0.005"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
+    <collision>
+      <origin xyz="-0.05 0.025 -0.03" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.05 -0.025 -0.03" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.12 0.03 -0.03" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.12 -0.03 -0.03" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+    </collision>
   </link>
   <joint name="left_ankle_roll_joint" type="revolute">
     <origin xyz="0 0 -0.017558" rpy="0 0 0"/>
@@ -297,18 +297,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hip_pitch_link.STL"/>
+        <mesh filename="meshes/right_hip_pitch_link.STL"/>
       </geometry>
       <material name="dark">
         <color rgba="0.2 0.2 0.2 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hip_pitch_link.STL"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
   </link>
   <joint name="right_hip_pitch_joint" type="revolute">
     <origin xyz="0 -0.064452 -0.1027" rpy="0 0 0"/>
@@ -326,18 +320,18 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hip_roll_link.STL"/>
+        <mesh filename="meshes/right_hip_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hip_roll_link.STL"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
+    <collision>
+      <origin xyz="0.02 0 -0.1" rpy="0 -0.0524 0"/>
+      <geometry>
+        <cylinder radius="0.045" length="0.25"/>
+      </geometry>
+    </collision>
   </link>
   <joint name="right_hip_roll_joint" type="revolute">
     <origin xyz="0 -0.052 -0.030465" rpy="0 -0.1749 0"/>
@@ -355,18 +349,12 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hip_yaw_link.STL"/>
+        <mesh filename="meshes/right_hip_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hip_yaw_link.STL"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
   </link>
   <joint name="right_hip_yaw_joint" type="revolute">
     <origin xyz="0.025001 0 -0.12412" rpy="0 0 0"/>
@@ -384,18 +372,18 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_knee_link.STL"/>
+        <mesh filename="meshes/right_knee_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_knee_link.STL"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
+    <collision>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.05" length="0.3"/>
+      </geometry>
+    </collision>
   </link>
   <joint name="right_knee_joint" type="revolute">
     <origin xyz="-0.078273 -0.0021489 -0.17734" rpy="0 0.1749 0"/>
@@ -413,7 +401,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_ankle_pitch_link.STL"/>
+        <mesh filename="meshes/right_ankle_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -422,7 +410,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_ankle_pitch_link.STL"/>-->
+<!--        <mesh filename="meshes/right_ankle_pitch_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -442,36 +430,36 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_ankle_roll_link.STL"/>
+        <mesh filename="meshes/right_ankle_roll_link.STL"/>
       </geometry>
       <material name="dark">
         <color rgba="0.2 0.2 0.2 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="-0.05 0.025 -0.03" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <sphere radius="0.005"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
-<!--    <collision>-->
-<!--      <origin xyz="-0.05 -0.025 -0.03" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <sphere radius="0.005"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
-<!--    <collision>-->
-<!--      <origin xyz="0.12 0.03 -0.03" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <sphere radius="0.005"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
-<!--    <collision>-->
-<!--      <origin xyz="0.12 -0.03 -0.03" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <sphere radius="0.005"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
+    <collision>
+      <origin xyz="-0.05 0.025 -0.03" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-0.05 -0.025 -0.03" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.12 0.03 -0.03" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0.12 -0.03 -0.03" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+    </collision>
   </link>
   <joint name="right_ankle_roll_joint" type="revolute">
     <origin xyz="0 0 -0.017558" rpy="0 0 0"/>
@@ -542,12 +530,18 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/waist_yaw_link.STL"/>
+        <mesh filename="meshes/waist_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
+    <collision>
+      <origin xyz="0.0 0.0 0.3" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.12 0.175 0.4"/>
+      </geometry>
+    </collision>
   </link>
   <joint name="waist_yaw_joint" type="revolute">
     <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -565,7 +559,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/waist_roll_link.STL"/>
+        <mesh filename="meshes/waist_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -588,7 +582,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/torso_link.STL"/>
+        <mesh filename="meshes/torso_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -597,7 +591,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/torso_link.STL"/>-->
+<!--        <mesh filename="meshes/torso_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -624,7 +618,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/logo_link.STL"/>
+        <mesh filename="meshes/logo_link.STL"/>
       </geometry>
       <material name="dark">
         <color rgba="0.2 0.2 0.2 1"/>
@@ -633,7 +627,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/logo_link.STL"/>-->
+<!--        <mesh filename="meshes/logo_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -648,7 +642,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/head_link.STL"/>
+        <mesh filename="meshes/head_link.STL"/>
       </geometry>
       <material name="dark">
         <color rgba="0.2 0.2 0.2 1"/>
@@ -657,7 +651,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/head_link.STL"/>-->
+<!--        <mesh filename="meshes/head_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -677,7 +671,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/waist_support_link.STL"/>
+        <mesh filename="meshes/waist_support_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -686,7 +680,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/waist_support_link.STL"/>-->
+<!--        <mesh filename="meshes/waist_support_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -762,7 +756,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_shoulder_pitch_link.STL"/>
+        <mesh filename="meshes/left_shoulder_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -791,7 +785,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_shoulder_roll_link.STL"/>
+        <mesh filename="meshes/left_shoulder_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -820,7 +814,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_shoulder_yaw_link.STL"/>
+        <mesh filename="meshes/left_shoulder_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -829,7 +823,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_shoulder_yaw_link.STL"/>-->
+<!--        <mesh filename="meshes/left_shoulder_yaw_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -849,18 +843,18 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_elbow_link.STL"/>
+        <mesh filename="meshes/left_elbow_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_elbow_link.STL"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
+    <collision>
+      <origin xyz="0.11 0 -0.01" rpy="0 1.57 0"/>
+      <geometry>
+        <cylinder radius="0.035" length="0.22"/>
+      </geometry>
+    </collision>
   </link>
   <joint name="left_elbow_joint" type="revolute">
     <origin xyz="0.015783 0 -0.080518" rpy="0 0 0"/>
@@ -885,7 +879,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_wrist_roll_link.STL"/>
+        <mesh filename="meshes/left_wrist_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -894,7 +888,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_wrist_roll_link.STL"/>-->
+<!--        <mesh filename="meshes/left_wrist_roll_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -914,7 +908,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_wrist_pitch_link.STL"/>
+        <mesh filename="meshes/left_wrist_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -923,7 +917,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_wrist_pitch_link.STL"/>-->
+<!--        <mesh filename="meshes/left_wrist_pitch_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -943,18 +937,18 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_wrist_yaw_link.STL"/>
+        <mesh filename="meshes/left_wrist_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_wrist_yaw_link.STL"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
+    <collision>
+      <origin xyz="0.1 -0.018 0.0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.055"/>
+      </geometry>
+    </collision>
   </link>
   <joint name="left_hand_palm_joint" type="fixed">
     <origin xyz="0.0415 0.003 0" rpy="0 0 0"/>
@@ -970,7 +964,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_palm_link.STL"/>
+        <mesh filename="meshes/left_hand_palm_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -979,7 +973,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_palm_link.STL"/>-->
+<!--        <mesh filename="meshes/left_hand_palm_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -999,7 +993,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_thumb_0_link.STL"/>
+        <mesh filename="meshes/left_hand_thumb_0_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1008,7 +1002,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_thumb_0_link.STL"/>-->
+<!--        <mesh filename="meshes/left_hand_thumb_0_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1028,7 +1022,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_thumb_1_link.STL"/>
+        <mesh filename="meshes/left_hand_thumb_1_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1057,7 +1051,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_thumb_2_link.STL"/>
+        <mesh filename="meshes/left_hand_thumb_2_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1066,7 +1060,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_thumb_2_link.STL"/>-->
+<!--        <mesh filename="meshes/left_hand_thumb_2_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1086,7 +1080,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_middle_0_link.STL"/>
+        <mesh filename="meshes/left_hand_middle_0_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1095,7 +1089,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_middle_0_link.STL"/>-->
+<!--        <mesh filename="meshes/left_hand_middle_0_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1115,7 +1109,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_middle_1_link.STL"/>
+        <mesh filename="meshes/left_hand_middle_1_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1124,7 +1118,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_middle_1_link.STL"/>-->
+<!--        <mesh filename="meshes/left_hand_middle_1_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1144,7 +1138,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_index_0_link.STL"/>
+        <mesh filename="meshes/left_hand_index_0_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1153,7 +1147,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_index_0_link.STL"/>-->
+<!--        <mesh filename="meshes/left_hand_index_0_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1173,7 +1167,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_index_1_link.STL"/>
+        <mesh filename="meshes/left_hand_index_1_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1182,7 +1176,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/left_hand_index_1_link.STL"/>-->
+<!--        <mesh filename="meshes/left_hand_index_1_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1195,7 +1189,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_shoulder_pitch_link.STL"/>
+        <mesh filename="meshes/right_shoulder_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1224,7 +1218,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_shoulder_roll_link.STL"/>
+        <mesh filename="meshes/right_shoulder_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1253,7 +1247,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_shoulder_yaw_link.STL"/>
+        <mesh filename="meshes/right_shoulder_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1262,7 +1256,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_shoulder_yaw_link.STL"/>-->
+<!--        <mesh filename="meshes/right_shoulder_yaw_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1282,18 +1276,18 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_elbow_link.STL"/>
+        <mesh filename="meshes/right_elbow_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_elbow_link.STL"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
+    <collision>
+      <origin xyz="0.11 0 -0.01" rpy="0 1.57 0"/>
+      <geometry>
+        <cylinder radius="0.035" length="0.22"/>
+      </geometry>
+    </collision>
   </link>
   <joint name="right_elbow_joint" type="revolute">
     <origin xyz="0.015783 0 -0.080518" rpy="0 0 0"/>
@@ -1318,7 +1312,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_wrist_roll_link.STL"/>
+        <mesh filename="meshes/right_wrist_roll_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1327,7 +1321,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_wrist_roll_link.STL"/>-->
+<!--        <mesh filename="meshes/right_wrist_roll_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1347,7 +1341,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_wrist_pitch_link.STL"/>
+        <mesh filename="meshes/right_wrist_pitch_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1356,7 +1350,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_wrist_pitch_link.STL"/>-->
+<!--        <mesh filename="meshes/right_wrist_pitch_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1376,18 +1370,18 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_wrist_yaw_link.STL"/>
+        <mesh filename="meshes/right_wrist_yaw_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
-<!--    <collision>-->
-<!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
-<!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_wrist_yaw_link.STL"/>-->
-<!--      </geometry>-->
-<!--    </collision>-->
+    <collision>
+      <origin xyz="0.1 0.018 0.0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.055"/>
+      </geometry>
+    </collision>
   </link>
   <joint name="right_hand_palm_joint" type="fixed">
     <origin xyz="0.0415 -0.003 0" rpy="0 0 0"/>
@@ -1403,7 +1397,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_palm_link.STL"/>
+        <mesh filename="meshes/right_hand_palm_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1412,7 +1406,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_palm_link.STL"/>-->
+<!--        <mesh filename="meshes/right_hand_palm_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1432,7 +1426,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_thumb_0_link.STL"/>
+        <mesh filename="meshes/right_hand_thumb_0_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1441,7 +1435,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_thumb_0_link.STL"/>-->
+<!--        <mesh filename="meshes/right_hand_thumb_0_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1461,7 +1455,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_thumb_1_link.STL"/>
+        <mesh filename="meshes/right_hand_thumb_1_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1490,7 +1484,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_thumb_2_link.STL"/>
+        <mesh filename="meshes/right_hand_thumb_2_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1499,7 +1493,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_thumb_2_link.STL"/>-->
+<!--        <mesh filename="meshes/right_hand_thumb_2_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1519,7 +1513,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_middle_0_link.STL"/>
+        <mesh filename="meshes/right_hand_middle_0_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1528,7 +1522,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_middle_0_link.STL"/>-->
+<!--        <mesh filename="meshes/right_hand_middle_0_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1548,7 +1542,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_middle_1_link.STL"/>
+        <mesh filename="meshes/right_hand_middle_1_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1557,7 +1551,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_middle_1_link.STL"/>-->
+<!--        <mesh filename="meshes/right_hand_middle_1_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1577,7 +1571,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_index_0_link.STL"/>
+        <mesh filename="meshes/right_hand_index_0_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1586,7 +1580,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_index_0_link.STL"/>-->
+<!--        <mesh filename="meshes/right_hand_index_0_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
@@ -1606,7 +1600,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_index_1_link.STL"/>
+        <mesh filename="meshes/right_hand_index_1_link.STL"/>
       </geometry>
       <material name="white">
         <color rgba="0.7 0.7 0.7 1"/>
@@ -1615,7 +1609,7 @@
 <!--    <collision>-->
 <!--      <origin xyz="0 0 0" rpy="0 0 0"/>-->
 <!--      <geometry>-->
-<!--        <mesh filename="/home/zolkin/AmberLab/Project-Isaac-RL/robot-rl/robot_rl/transfer/mujoco_sim/robots/g1/meshes/right_hand_index_1_link.STL"/>-->
+<!--        <mesh filename="meshes/right_hand_index_1_link.STL"/>-->
 <!--      </geometry>-->
 <!--    </collision>-->
   </link>
