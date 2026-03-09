@@ -37,9 +37,10 @@ onboard:
           1,                  # b
         ]
         vel_thresholds: [
-          10.0, 1.1,
-          1.1, -1.1
+          10.0, 0.9,
+          0.9, -1.1
         ]
+        START_IN_SIM: true
         init_behavior: "walking"
         hf_repo_id: "zolkin/robot_rl"
         log: true
@@ -73,9 +74,9 @@ onboard:
     - pkg: g1_control
       executable: high_level_control
       params:
-        v_x_min: -0.75
-        v_x_max: 2.3 #0.75 #3.7
-        v_y_max: 0.6
+        v_x_min: -0.25
+        v_x_max: 3.7 #2.5 #0.75 #3.7
+        v_y_max: 0.75
         w_z_max: 0.4 #0.75 #0.4
         vel_increment: 0.1
         kp_yaw: 0.75 #2.5 #3.0
@@ -89,8 +90,8 @@ onboard:
         temp_safety_threshold: 120.0
         temp_lower_start: 105.0
         safe_temp_speed: 1.2
-        traj_dt: 0.3333333
-        traj_nodes: 10
+        traj_dt: 0.2
+        traj_nodes: 21
       # callback_groups:
       publishers:
         - ros_parameter: pub_ctrl_setting
@@ -121,7 +122,7 @@ onboard:
           callback_group: None
         # ----- Odom subscriber ----- #
         - ros_parameter: sub_odom_setting
-          topic: /Odometry #/obelisk/g1/head_odom
+          topic: /obelisk/g1/head_odom
           history_depth: 10
           callback_group: None
         # ----- Unitree High Level subscriber ----- #
@@ -131,8 +132,8 @@ onboard:
           callback_group: None
         # ----- Lidar IMU subscriber ----- #
         - ros_parameter: sub_lidar_imu
-          topic: /livox/imu #/obelisk/g1/lidar_imu
-          msg_type: imu #ObkIMU
+          topic: /obelisk/g1/lidar_imu
+          msg_type: Imu
           history_depth: 10
           callback_group: None
         # ----- MPC Command Subscriber ----- #
@@ -144,59 +145,13 @@ onboard:
         - ros_parameter: timer_ctrl_setting
           timer_period_sec: 0.05    # 20 Hz
           callback_group: None
-  # ----- MPC Controller ----- #
-    - pkg: mpc
-      executable: mpc_node
-      params:
-        problem_name: breezeway_v2 #walk_forward #right
-        dt: 0.3
-        v_max: [2.3, 0.6, 0.4] #[2.5, 0.5, 0.2]
-        v_min: [-0.5, -0.6, -0.4] #[-0.5, -0.5, -0.2]
-        # dv_max: [0.3, 0.4, 0.3] #[0.1, 0.05, 0.05]
-        N: 25
-        Q: [10, 10, 0.0]
-        R: [10.0, 10.0, 5.0] #[0.4, 0.4, 0.1]
-        cbf_alpha: 0.3 #0.7
-        cbf_delta: 0.5 #5 #0.2
-        goal_deadzone: 3.0
-        v_norm_max: 2.3 #0.75 #3.0 #0.8
-        plan_topic: /obelisk/g1/mpc_path
-        path_topic: /obelisk/g1/robot_path
-        joy_topic: /obelisk/g1/joy_passthrough
-        btn_idle: 0     # A
-        btn_zeroing: 1  # B
-        btn_run: 3      # Y
-        obst_topic: /obelisk/g1/mpc_obstacles
-        # Zeroing parameters
-        zeroing_position_threshold: 0.05
-        zeroing_stable_duration: 2.0
-        zeroing_check_period: 0.1
-        zeroing_timeout: 30.0
-        odom_frame: odom
-        camera_init_frame: camera_init
-        logging: False
-      # callback_groups:
-      publishers:
-      # ----- High Level Control ----- #
-        - ros_parameter: pub_ctrl_setting
-          topic: /mpc_command
-          history_depth: 10
-          callback_group: None
-      subscribers:
-      # ----- subscribe to odometry ----- #
-        - ros_parameter: sub_est_setting
-          topic: /obelisk/g1/odom
-      timers:
-        - ros_parameter: timer_ctrl_setting
-          timer_period_sec: 0.4
-          callback_group: None
   # ----- High Level/Execution FSM Controller ----- #
     - pkg: obelisk_unitree_cpp
       executable: obelisk_unitree_joystick
       params:
-        v_x_scale: 0.8 #3.6
-        v_y_scale: 0.5
-        w_z_scale: 0.2
+        v_x_scale: 0.75 #3.6
+        v_y_scale: 0.3
+        w_z_scale: 0.3
 
         vel_cmd_yaw: 13  # RY
       # callback_groups:
@@ -260,111 +215,33 @@ onboard:
   # ------------- Robot ------------- #
   # --------------------------------- #
   robot:
-    - is_simulated: False
-      pkg: obelisk_unitree_cpp
-      executable: obelisk_unitree_g1_hardware
+    - is_simulated: True
+      pkg: robot_sim
+      executable: simulation
       params:
-        pub_motor_temp: True
-        logging: True
-        default_joint_names: [
-          "left_hip_pitch_joint", "left_hip_roll_joint", "left_hip_yaw_joint",
-          "left_knee_joint", "left_ankle_pitch_joint", "left_ankle_roll_joint",
-          "right_hip_pitch_joint", "right_hip_roll_joint", "right_hip_yaw_joint",
-          "right_knee_joint", "right_ankle_pitch_joint", "right_ankle_roll_joint",
-          "waist_yaw_joint",
-          "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint", "left_elbow_joint",
-          "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint",
-          "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint", "right_elbow_joint",
-          "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint",
-        ]
-        default_kp: [
-          100., 100., 100.,       # L hip
-          150., 100., 100.,       # L knee, ankle
-          100., 100., 100.,       # R hip
-          150., 100., 100.,       # R knee, ankle
-          100.,                   # Waist
-          50., 50., 40., 40.,  # L shoulder, elbow
-          30., 30., 30.,       # L wrist
-          50., 50., 40., 40.,  # R shoulder, elbow
-          30., 30., 30.,       # R wrist
-        ]
-        default_kd: [
-          2., 2., 2.,       # L hip
-          4., 2., 2.,       # L knee, ankle
-          2., 2., 2.,       # R hip
-          4., 2., 2.,       # R knee, ankle
-          2.,               # Waist
-          2., 2., 2., 2.,   # L shoulder, elbow
-          2., 2., 2.,       # L wrist
-          2., 2., 2., 2.,   # R shoulder, elbow
-          2., 2., 2.,       # R wrist
-        ]
-        default_kd_damping: [
-          10.,10.,10.,         # L hip
-          10.,10.,10.,         # L knee, ankle
-          10.,10.,10.,         # R hip
-          10.,10.,10.,         # R knee, ankle
-          10.,               # Waist
-          10., 10., 10.,       # L shoulder
-          10., 10., 10., 10.,   # L elbow, wrist
-          10., 10., 10.,       # R shoulder
-          10., 10., 10., 10.,   # R elbow, wrist
-        ]
-        user_pose: [-0.25, 0.01, -0.005, 0.45, -0.25, 0.0,
-                  -0.25, -0.01, -0.005, 0.45, -0.25, 0.0,
-                  0,
-                  0.47, 0.24, 0, 0.8, 0, 0, 0,
-                  0.47, -0.24, 0, 0.8, 0, 0, 0,]
-        # Going to a bad set of angles
-        # user_pose: [
-        #   0.5, 0.0, 2.25, 0.175, 0.25, 0.0,
-        #   0.5, -0.2, -2.25, 0.3, -0.35, -0.3,
-        #   -2.5,
-        #   0.0, 0.1, 0.1, 1.4, 0, 0, 0,
-        #   -0.25, -0.1, 2.5, 1.3, 0, 0, 0,]
-    # - is_simulated: True
-    #   pkg: robot_sim
-    #   executable: simulation
-    #   params:
-    #     ic_keyframe: standing
+        ic_keyframe: standing
       # callback_groups:
       publishers:
-      # ----- Joints ----- #
-        - ros_parameter: pub_sensor_setting
-          topic: /obelisk/g1/joint_encoders
+        - ros_parameter: pub_true_sim_state_setting
+          topic: /obelisk/g1/true_sim_state
           history_depth: 10
-      # ----- IMU ----- #
-        - ros_parameter: pub_imu_setting
-          topic: /obelisk/g1/pelvis_imu
+          callback_group: None
+      timers:
+        - ros_parameter: timer_true_sim_state_setting
           history_depth: 10
-      # ----- Odom ----- #
-        - ros_parameter: pub_odom_setting
-          topic: /obelisk/g1/odom
-          history_depth: 10
+          timer_period_sec: 0.002
+          callback_group: None
       subscribers:
-      # ----- Control ----- #
         - ros_parameter: sub_ctrl_setting
           topic: /obelisk/g1/low_level_control
           history_depth: 10
           callback_group: None
-      # ----- Execution FSM ----- #
-        - ros_parameter: sub_fsm_setting
-          topic: /obelisk/g1/exec_fsm
-          history_depth: 10
-          callback_group: None
-      # ----- High Level Control ----- #
-        - ros_parameter: sub_vel_cmd_setting
-          topic: /obelisk/g1/vel_cmd
-          history_depth: 10
-          callback_group: None      
-      timers:
-        - ros_parameter: timer_logging_setting
-          timer_period_sec: 0.05  # 20 Hz logging
-          callback_group: None
       sim:
         - ros_parameter: mujoco_setting
           robot_pkg: g1_model
-          model_xml_path: scene.xml
+          # model_xml_path: scene.xml
+          # model_xml_path: walls.xml
+          model_xml_path: single_wall.xml
           sensor_settings:
           # ---------- Joint Encoders ---------- #
           - topic: /obelisk/g1/joint_encoders
@@ -512,7 +389,7 @@ onboard:
           #     torso_camera_gyro: gyro
           # ---------- Head Lidar Odometry ---------- #
           - topic: /obelisk/g1/head_odom
-            dt: 0.1
+            dt: 0.01 #0.1
             msg_type: Odometry
             sensor_names:
               head_lidar_pos_sensor: framepos
@@ -527,6 +404,12 @@ onboard:
               lidar_imu_acc_sensor: accelerometer
               lidar_imu_gyro_sensor: gyro
               lidar_imu_quat_sensor: framequat
+          - topic: /cloud_registered_body
+            dt: 0.1
+            msg_type: PointCloud2
+            config_path: /home/zolkin/robot_rl/transfer/obelisk/g1_control/configs/lidar/mid360.yaml
+            sensor_names:
+              scan_pos_sensor: framepos
           # viz_geoms:
           #   dt: 1
           #   # ----- Stair scene ----- #
